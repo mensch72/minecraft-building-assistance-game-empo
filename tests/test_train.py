@@ -730,8 +730,7 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
         obs = trainer.workers.local_worker().foreach_env(lambda env: env.reset()[0])[0]
         cast(Any, policy.model).compute_priors_and_value([obs], [])
         goal_logits = cast(Any, policy.model).goal_predictor()
-        expected_uniform_logits = goal_logits[:, :1].expand_as(goal_logits)
-        assert torch.allclose(goal_logits, expected_uniform_logits)
+        assert torch.allclose(goal_logits, torch.zeros_like(goal_logits))
     finally:
         trainer.stop()
 

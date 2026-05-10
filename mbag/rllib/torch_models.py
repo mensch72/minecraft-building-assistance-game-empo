@@ -435,10 +435,10 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         bias = getattr(final_layer, "bias", None)
         with torch.no_grad():
             weight.zero_()
-            weight.requires_grad = False
+            weight.requires_grad_(False)
             if bias is not None:
                 bias.zero_()
-                bias.requires_grad = False
+                bias.requires_grad_(False)
 
     def _get_embedded_actions(
         self,

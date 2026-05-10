@@ -431,8 +431,20 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
                 "skipping zero/freeze."
             )
             return
-        weight = cast(Any, final_layer).weight
+        weight = getattr(final_layer, "weight")
+        if not isinstance(weight, nn.Parameter):
+            logger.warning(
+                "goal_agnostic=True but final goal_head weight is not a Parameter; "
+                "skipping zero/freeze."
+            )
+            return
         bias = getattr(final_layer, "bias", None)
+        if bias is not None and not isinstance(bias, nn.Parameter):
+            logger.warning(
+                "goal_agnostic=True but final goal_head bias is not a Parameter; "
+                "ignoring bias zero/freeze."
+            )
+            bias = None
         with torch.no_grad():
             weight.zero_()
             weight.requires_grad_(False)

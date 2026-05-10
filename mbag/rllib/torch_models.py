@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import logging
 from abc import ABC, abstractmethod
 from typing import (
     Any,
@@ -53,6 +54,8 @@ from mbag.environment.types import (
 ACTION_MASK = "action_mask"
 PREV_OBS = "prev_obs"
 PREV_OTHER_AGENT_ACTIONS = "prev_other_agent_actions"
+
+logger = logging.getLogger(__name__)
 
 
 class Conv3d1x1x1(nn.Module):
@@ -417,14 +420,25 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         )
 
     def _set_goal_head_to_uniform(self) -> None:
-        final_layer = self.goal_head[-1]
-        assert isinstance(final_layer, Conv3d1x1x1)
+        final_layer: Optional[nn.Module] = None
+        if isinstance(self.goal_head, nn.Sequential) and len(self.goal_head) > 0:
+            final_layer = self.goal_head[-1]
+        else:
+            final_layer = self.goal_head
+        if not hasattr(final_layer, "weight"):
+            logger.warning(
+                "goal_agnostic=True but final goal_head layer has no weights; "
+                "skipping zero/freeze."
+            )
+            return
+        weight = cast(Any, final_layer).weight
+        bias = getattr(final_layer, "bias", None)
         with torch.no_grad():
-            final_layer.weight.zero_()
-            final_layer.weight.requires_grad = False
-            if final_layer.bias is not None:
-                final_layer.bias.zero_()
-                final_layer.bias.requires_grad = False
+            weight.zero_()
+            weight.requires_grad = False
+            if bias is not None:
+                bias.zero_()
+                bias.requires_grad = False
 
     def _get_embedded_actions(
         self,

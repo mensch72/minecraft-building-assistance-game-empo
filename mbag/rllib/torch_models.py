@@ -148,6 +148,8 @@ class MbagModelConfig(TypedDict, total=False):
     """Whether to input the last action taken to the network."""
     use_prev_other_agent_action: bool
     """Whether to input the last action taken by other agents to the network."""
+    goal_agnostic: bool
+    """Force goal prediction to be uniform and non-trainable at the final layer."""
 
 
 DEFAULT_CONFIG: MbagModelConfig = {
@@ -170,6 +172,7 @@ DEFAULT_CONFIG: MbagModelConfig = {
     "use_prev_blocks": False,
     "use_prev_action": False,
     "use_prev_other_agent_action": False,
+    "goal_agnostic": False,
 }
 
 
@@ -237,6 +240,7 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         self.use_prev_blocks = extra_config["use_prev_blocks"]
         self.use_prev_action = extra_config["use_prev_action"]
         self.use_prev_other_agent_action = extra_config["use_prev_other_agent_action"]
+        self.goal_agnostic = extra_config["goal_agnostic"]
 
         self.action_mapping = torch.from_numpy(
             MbagActionDistribution.get_action_mapping(self.env_config)
@@ -267,6 +271,8 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         self.action_head = self._construct_action_head()
         self.value_head = self._construct_value_head()
         self.goal_head = self._construct_goal_head()
+        if self.goal_agnostic:
+            self._set_goal_head_to_uniform()
 
         if self.use_per_location_lstm:
             assert self.vf_share_layers
@@ -409,6 +415,36 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
             nn.LeakyReLU(),
             Conv3d1x1x1(self.hidden_size, MinecraftBlocks.NUM_BLOCKS),
         )
+
+    def _set_goal_head_to_uniform(self) -> None:
+        final_layer: Optional[nn.Module] = None
+        if isinstance(self.goal_head, nn.Sequential) and len(self.goal_head) > 0:
+            final_layer = self.goal_head[-1]
+        else:
+            final_layer = self.goal_head
+        if not hasattr(final_layer, "weight"):
+            raise TypeError(
+                "goal_agnostic=True requires goal_head final layer to have a weight "
+                "parameter."
+            )
+        weight = getattr(final_layer, "weight")
+        if not isinstance(weight, nn.Parameter):
+            raise TypeError(
+                "goal_agnostic=True requires goal_head final layer weight to be a "
+                "Parameter."
+            )
+        bias = getattr(final_layer, "bias", None)
+        if bias is not None and not isinstance(bias, nn.Parameter):
+            raise TypeError(
+                "goal_agnostic=True requires goal_head final layer bias to be a "
+                "Parameter or None."
+            )
+        with torch.no_grad():
+            weight.zero_()
+            weight.requires_grad_(False)
+            if bias is not None:
+                bias.zero_()
+                bias.requires_grad_(False)
 
     def _get_embedded_actions(
         self,
@@ -835,7 +871,10 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
                 **state_dict,
                 "fc_after_embedding.weight": resized_fc_weight,
             }
-        return super().load_state_dict(state_dict, *args, **kwargs)
+        result = super().load_state_dict(state_dict, *args, **kwargs)
+        if self.goal_agnostic:
+            self._set_goal_head_to_uniform()
+        return result
 
 
 class ResidualBlock(nn.Module):

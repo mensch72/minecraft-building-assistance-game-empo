@@ -414,16 +414,21 @@ class MbagEnv(object):
 
         self.palette_x = world_size[0] - 1
 
-        # Determine effective number of x slots for random goal placement.
-        # Fall back to 1 slot if the world is too narrow to fit multiple slots.
+        # Goal building width is 1/goal_x_slots of the buildable x area, so that
+        # buildings span roughly that fraction of the world width.  The building is
+        # then placed at a uniformly random x offset anywhere it fits (with 1-block
+        # buffers on each side), giving a continuous distribution rather than fixed
+        # slot boundaries.  If the world is too narrow to give each slot at least
+        # 3 blocks (matching the minimum meaningful size), fall back to using the
+        # full buildable width so small worlds are unaffected.
         goal_x_slots = self.config.get("goal_x_slots", 1)
-        slot_x_size = usable_x // goal_x_slots
-        if slot_x_size < 3:
-            goal_x_slots = 1
-            slot_x_size = usable_x
+        buildable_x = max(1, usable_x - 2)
+        if buildable_x >= goal_x_slots * 3:
+            goal_width = buildable_x // goal_x_slots
+        else:
+            goal_width = buildable_x
 
-        x_goal_size = slot_x_size - 2
-        goal_size = (x_goal_size, world_size[1] - 2, world_size[2] - 2)
+        goal_size = (goal_width, world_size[1] - 2, world_size[2] - 2)
 
         small_goal = self.goal_generator.generate_goal(goal_size)
 
@@ -431,10 +436,10 @@ class MbagEnv(object):
 
         shape = small_goal.size
 
-        # Choose a random x slot for goal placement.
-        if goal_x_slots > 1:
-            chosen_slot = random.randint(0, goal_x_slots - 1)
-            x_offset = 1 + chosen_slot * slot_x_size
+        # Choose a uniformly random x offset in the valid range [1, usable_x-shape[0]-1].
+        max_x_offset = usable_x - shape[0] - 1
+        if max_x_offset >= 1:
+            x_offset = random.randint(1, max_x_offset)
         else:
             x_offset = 1
 
@@ -456,13 +461,23 @@ class MbagEnv(object):
         return goal
 
     def _place_clutter_blocks(self):
-        """Place random clutter blocks in the buildable area above the floor."""
+        """Place clutter blocks above the floor.
+
+        Each block is placed at a randomly chosen air position in the clutter
+        zone (y >= 2, up to 1 below the ceiling).  After the first block is
+        placed, subsequent blocks are sampled with probability inversely
+        proportional to ``1 + distance`` to the nearest already-placed clutter
+        block, so that clutter naturally clusters and can stack several layers
+        high.
+        """
 
         num_clutter = self.config.get("num_clutter_blocks", 0)
         if num_clutter <= 0:
             return
 
-        clutter_bedrock_frac = max(0.0, min(1.0, self.config.get("clutter_bedrock_fraction", 0.5)))
+        clutter_bedrock_frac = max(
+            0.0, min(1.0, self.config.get("clutter_bedrock_fraction", 0.5))
+        )
         width, height, depth = self.config["world_size"]
 
         # Avoid placing clutter in the palette column when resources are finite.
@@ -470,22 +485,48 @@ class MbagEnv(object):
 
         placeable_block_ids = sorted(MinecraftBlocks.PLACEABLE_BLOCK_IDS)
 
-        attempts = 0
-        placed = 0
-        while placed < num_clutter and attempts < num_clutter * 10:
-            attempts += 1
-            x = random.randrange(x_max)
-            # Keep a 1-block buffer at the top to be consistent with _generate_goal.
-            y = random.randint(2, height - 2)
-            z = random.randrange(depth)
-            if self.current_blocks.blocks[x, y, z] != MinecraftBlocks.AIR:
-                continue
-            if random.random() < clutter_bedrock_frac:
-                block_id = MinecraftBlocks.BEDROCK
+        # Valid clutter zone: y in [2, height-2] (1-block buffer at top).
+        y_min, y_max_clutter = 2, height - 2
+        if y_min > y_max_clutter:
+            return  # World too short to place any clutter.
+
+        # Track placed clutter positions (world coords) for distance weighting.
+        clutter_positions: List[Tuple[int, int, int]] = []
+
+        for _ in range(num_clutter):
+            # Gather all air positions inside the clutter zone.
+            clutter_zone = self.current_blocks.blocks[
+                :x_max, y_min : y_max_clutter + 1, :
+            ]
+            zone_air = np.argwhere(clutter_zone == MinecraftBlocks.AIR)
+            if len(zone_air) == 0:
+                break  # No space left.
+
+            # zone_air[:,1] is offset by y_min from world y; convert to world coords.
+            world_pos = zone_air.copy()
+            world_pos[:, 1] += y_min
+
+            if clutter_positions:
+                # Weight each candidate inversely by 1 + distance to nearest clutter.
+                clutter_arr = np.array(clutter_positions, dtype=float)
+                cand_arr = world_pos.astype(float)
+                diffs = cand_arr[:, None, :] - clutter_arr[None, :, :]  # (N,K,3)
+                min_dists = np.sqrt((diffs**2).sum(axis=2)).min(axis=1)  # (N,)
+                raw_weights = 1.0 / (1.0 + min_dists)
+                weights = (raw_weights / raw_weights.sum()).tolist()
+                (pos_idx,) = random.choices(range(len(world_pos)), weights=weights)
             else:
-                block_id = random.choice(placeable_block_ids)
+                pos_idx = random.randrange(len(world_pos))
+
+            x, y, z = int(world_pos[pos_idx, 0]), int(world_pos[pos_idx, 1]), int(world_pos[pos_idx, 2])
+
+            block_id = (
+                MinecraftBlocks.BEDROCK
+                if random.random() < clutter_bedrock_frac
+                else random.choice(placeable_block_ids)
+            )
             self.current_blocks.blocks[x, y, z] = block_id
-            placed += 1
+            clutter_positions.append((x, y, z))
 
     def _copy_palette_from_goal(self):
         # Copy over the palette from the goal generator

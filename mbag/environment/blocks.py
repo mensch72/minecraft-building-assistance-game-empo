@@ -424,11 +424,8 @@ class MinecraftBlocks(object):
                 # Can't place an unplaceable block.
                 return None
         else:
-            if self.blocks[block_location] in [
-                MinecraftBlocks.AIR,
-                MinecraftBlocks.BEDROCK,
-            ]:
-                # Can't break these blocks.
+            if self.blocks[block_location] == MinecraftBlocks.AIR:
+                # Can't break air.
                 return None
 
         viewpoint_click_candidates = self._get_viewpoint_click_candidates(

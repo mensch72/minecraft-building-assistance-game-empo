@@ -1,6 +1,5 @@
 import contextlib
 import copy
-import logging
 from abc import ABC, abstractmethod
 from typing import (
     Any,
@@ -54,8 +53,6 @@ from mbag.environment.types import (
 ACTION_MASK = "action_mask"
 PREV_OBS = "prev_obs"
 PREV_OTHER_AGENT_ACTIONS = "prev_other_agent_actions"
-
-logger = logging.getLogger(__name__)
 
 
 class Conv3d1x1x1(nn.Module):
@@ -426,25 +423,22 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         else:
             final_layer = self.goal_head
         if not hasattr(final_layer, "weight"):
-            logger.warning(
-                "goal_agnostic=True but final goal_head layer has no weights; "
-                "skipping zero/freeze."
+            raise TypeError(
+                "goal_agnostic=True requires goal_head final layer to have a weight "
+                "parameter."
             )
-            return
         weight = getattr(final_layer, "weight")
         if not isinstance(weight, nn.Parameter):
-            logger.warning(
-                "goal_agnostic=True but final goal_head weight is not a Parameter; "
-                "skipping zero/freeze."
+            raise TypeError(
+                "goal_agnostic=True requires goal_head final layer weight to be a "
+                "Parameter."
             )
-            return
         bias = getattr(final_layer, "bias", None)
         if bias is not None and not isinstance(bias, nn.Parameter):
-            logger.warning(
-                "goal_agnostic=True but final goal_head bias is not a Parameter; "
-                "ignoring bias zero/freeze."
+            raise TypeError(
+                "goal_agnostic=True requires goal_head final layer bias to be a "
+                "Parameter or None."
             )
-            bias = None
         with torch.no_grad():
             weight.zero_()
             weight.requires_grad_(False)

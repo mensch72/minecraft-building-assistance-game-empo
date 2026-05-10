@@ -693,6 +693,25 @@ def test_alpha_zero_goal_predictor_kl(default_config, default_alpha_zero_config)
 @pytest.mark.slow
 @pytest.mark.timeout(120)
 def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
+    non_agnostic_result = ex.run(
+        config_updates={
+            **default_config,
+            **default_alpha_zero_config,
+            "goal_agnostic": False,
+            "goal_loss_coeff": 123,
+            "num_training_iters": 0,
+            "num_workers": 0,
+        }
+    ).result
+    assert non_agnostic_result is not None
+    non_agnostic_trainer = load_trainer(
+        non_agnostic_result["final_checkpoint"], "MbagAlphaZero"
+    )
+    try:
+        assert non_agnostic_trainer.config["goal_loss_coeff"] == 123
+    finally:
+        non_agnostic_trainer.stop()
+
     result = ex.run(
         config_updates={
             **default_config,

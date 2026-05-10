@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 DEFAULT_WORLD_SIZE = (11, 10, 10)
 DEFAULT_ASSISTANT_EVAL_NUM_SIMULATIONS = 20
 DEFAULT_GOAL_SUBSET = "test"
+EXCLUDED_CLUTTER_VERTICAL_LAYERS = 3
 
 
 @dataclass(frozen=True)
@@ -44,8 +45,12 @@ def _compute_large_grid_variant(
     width, height, depth = world_size
     large_world_size = (width * x_scale, height, depth)
     # Clutter is only placed above the floor and below the top buffer in MbagEnv,
-    # so exclude those 3 vertical layers when converting density to a block count.
-    clutter_volume = large_world_size[0] * large_world_size[2] * max(height - 3, 1)
+    # so exclude the floor and top-buffer layers when converting density to a count.
+    clutter_volume = (
+        large_world_size[0]
+        * large_world_size[2]
+        * max(height - EXCLUDED_CLUTTER_VERTICAL_LAYERS, 1)
+    )
     num_clutter_blocks = int(round(clutter_density * clutter_volume))
     return {
         "width": large_world_size[0],
@@ -220,10 +225,12 @@ def _load_json(path: Path) -> Dict[str, Any]:
 def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
     mean_metrics = metrics["mean_metrics"]
     episode_metrics = metrics["episode_metrics"]
+    if not episode_metrics:
+        raise ValueError("metrics.json contained no episode_metrics to summarize")
     assistant_player_metrics = mean_metrics["player_metrics"][-1]
     goal_completion_rate = sum(
         episode_metric["goal_percentage"] == 1.0 for episode_metric in episode_metrics
-    ) / max(len(episode_metrics), 1)
+    ) / len(episode_metrics)
     return {
         "goal_percentage": float(mean_metrics["goal_percentage"]),
         "goal_completion_rate": float(goal_completion_rate),
@@ -246,7 +253,7 @@ def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
 
 def _aggregate_comparable_metrics(
     comparable_metrics_per_seed: Iterable[Mapping[str, float]],
-) -> Dict[str, Dict[str, float]]:
+) -> Dict[str, Dict[str, Any]]:
     comparable_metrics_list = list(comparable_metrics_per_seed)
     if not comparable_metrics_list:
         return {}
@@ -256,7 +263,7 @@ def _aggregate_comparable_metrics(
         values = [metrics[key] for metrics in comparable_metrics_list]
         aggregate[key] = {
             "mean": float(statistics.fmean(values)),
-            "stdev": float(statistics.stdev(values)) if len(values) > 1 else 0.0,
+            "stdev": float(statistics.stdev(values)) if len(values) > 1 else None,
         }
     return aggregate
 

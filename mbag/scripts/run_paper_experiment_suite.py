@@ -44,6 +44,8 @@ def _compute_large_grid_variant(
 ) -> Dict[str, Any]:
     width, height, depth = world_size
     large_world_size = (width * x_scale, height, depth)
+    # Clutter is only placed above the floor and below the top buffer in MbagEnv,
+    # so exclude those 3 vertical layers when converting density to a block count.
     clutter_volume = large_world_size[0] * large_world_size[2] * max(height - 3, 1)
     num_clutter_blocks = int(round(clutter_density * clutter_volume))
     return {

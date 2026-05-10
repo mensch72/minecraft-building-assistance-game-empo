@@ -170,7 +170,7 @@ There are several steps in the pipeline to train and evaluate human models and a
       * `algorithm_config_updates`: the options in here can be used to modify AssistanceZero's MCTS at test time. The main option of interest is `"num_simulations"`; more simulations take longer but may lead to better performance. We always use 20 simulations for evaluation in the paper.
       * `env_config_updates`: setting the `"subset"` option under `"goal_generator_config"` will choose whether to use sample goal houses from the `"train"` or `"test"` dataset.
 
-  6. **Pretrained and SFT assistants:** to train the pretrained and SFT assistants, run the following commands:
+6. **Pretrained and SFT assistants:** to train the pretrained and SFT assistants, run the following commands:
 
         # Generate a dataset of episodes from the BC human model (this will take a while).
         # It will create a directory under the human model checkpoint called rollouts_...

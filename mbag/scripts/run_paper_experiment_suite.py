@@ -229,7 +229,8 @@ def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
         raise ValueError("metrics.json contained no episode_metrics to summarize")
     assistant_player_metrics = mean_metrics["player_metrics"][-1]
     goal_completion_rate = sum(
-        episode_metric["goal_percentage"] == 1.0 for episode_metric in episode_metrics
+        episode_metric["goal_percentage"] >= 1.0 - 1e-9
+        for episode_metric in episode_metrics
     ) / len(episode_metrics)
     return {
         "goal_percentage": float(mean_metrics["goal_percentage"]),
@@ -258,13 +259,15 @@ def _aggregate_comparable_metrics(
     if not comparable_metrics_list:
         return {}
     keys = list(comparable_metrics_list[0].keys())
-    aggregate: Dict[str, Dict[str, float]] = {}
+    aggregate: Dict[str, Dict[str, Any]] = {}
     for key in keys:
         values = [metrics[key] for metrics in comparable_metrics_list]
-        aggregate[key] = {
+        metric_summary: Dict[str, Any] = {
             "mean": float(statistics.fmean(values)),
-            "stdev": float(statistics.stdev(values)) if len(values) > 1 else None,
         }
+        if len(values) > 1:
+            metric_summary["stdev"] = float(statistics.stdev(values))
+        aggregate[key] = metric_summary
     return aggregate
 
 

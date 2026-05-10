@@ -1,0 +1,25 @@
+Bootstrap: docker
+From: python:3.10-slim
+
+%files
+    . /opt/mbag-src
+
+%environment
+    export PYTHONNOUSERSITE=1
+    export PYTHONPATH=/opt/mbag-src
+
+%post
+    set -eux
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+    python -m pip install --upgrade pip setuptools wheel
+    cd /opt/mbag-src
+    python -m pip install --no-cache-dir -e .[rllib]
+
+%runscript
+    exec python "$@"

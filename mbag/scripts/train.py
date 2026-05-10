@@ -110,6 +110,9 @@ def sacred_config(_log):  # noqa
     width = 11
     height = 10
     depth = 10
+    goal_x_slots = 1
+    num_clutter_blocks = 0
+    clutter_bedrock_fraction = 0.5
     random_start_locations = True
     teleportation = True
     flying = True
@@ -254,6 +257,9 @@ def sacred_config(_log):  # noqa
         "randomize_first_episode_length": randomize_first_episode_length,
         "truncate_on_no_progress_timesteps": truncate_on_no_progress_timesteps,
         "world_size": (width, height, depth),
+        "goal_x_slots": goal_x_slots,
+        "num_clutter_blocks": num_clutter_blocks,
+        "clutter_bedrock_fraction": clutter_bedrock_fraction,
         "random_start_locations": random_start_locations,
         "goal_generator": TransformedGoalGenerator,
         "goal_generator_config": transformed_goal_generator_config,

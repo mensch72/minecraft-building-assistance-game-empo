@@ -29,6 +29,19 @@ This section describes how to set up your environment for running MBAG.
     unzip -o craftassist.zip
     cd ..
 
+### Running on an HPC with Apptainer/Singularity
+
+If your cluster uses Apptainer/Singularity, you can build a container with the
+supported Python/RLlib stack directly from this repository:
+
+    apptainer build mbag-hpc.sif apptainer/mbag-hpc.def
+
+Then run commands inside the container with:
+
+    apptainer exec --nv mbag-hpc.sif python -m mbag.scripts.train --help
+
+Use `--nv` when your cluster exposes NVIDIA GPUs to containers.
+
 ### Linting, testing, and type checking
 
 The project uses various tools to maintain code quality. To install them all, run
@@ -157,7 +170,7 @@ There are several steps in the pipeline to train and evaluate human models and a
       * `algorithm_config_updates`: the options in here can be used to modify AssistanceZero's MCTS at test time. The main option of interest is `"num_simulations"`; more simulations take longer but may lead to better performance. We always use 20 simulations for evaluation in the paper.
       * `env_config_updates`: setting the `"subset"` option under `"goal_generator_config"` will choose whether to use sample goal houses from the `"train"` or `"test"` dataset.
 
- 6. **Pretrained and SFT assistants:** to train the pretrained and SFT assistants, run the following commands:
+  6. **Pretrained and SFT assistants:** to train the pretrained and SFT assistants, run the following commands:
 
         # Generate a dataset of episodes from the BC human model (this will take a while).
         # It will create a directory under the human model checkpoint called rollouts_...
@@ -175,3 +188,38 @@ There are several steps in the pipeline to train and evaluate human models and a
         python -m mbag.scripts.train with sft_assistant \
             checkpoint_to_load_policies=path/to/pretrained/assistant/checkpoint \
             checkpoint_name=pretrained_assistant
+
+### Reproducible paper-style assistant suite for HPC runs
+
+To run the paper baseline AssistanceZero assistant experiment together with:
+
+1. the standard paper setting,
+2. a cluttered larger-grid setting, and
+3. the cluttered larger-grid setting with `goal_agnostic=True`,
+
+use the suite launcher below. It runs every variant for the seeds you specify,
+stores per-seed Sacred outputs, evaluates every trained assistant, and writes a
+`suite_summary.json` file containing seed-by-seed results plus aggregate
+statistics over comparable metrics (`goal_percentage`, completion rate, reward,
+and assistant action/reward metrics).
+
+Example:
+
+    apptainer exec --nv mbag-hpc.sif python -m mbag.scripts.run_paper_experiment_suite \
+        --human-checkpoint path/to/human/model/checkpoint \
+        --human-run BC \
+        --out-dir path/to/output_dir \
+        --seeds 0 1 2
+
+Useful options:
+
+  * `--dry-run` prints the exact train/evaluate commands without executing them.
+  * `--clutter-density` controls how much clutter is injected into the larger grid.
+  * `--assistant-num-simulations` controls the evaluation-time MCTS budget.
+  * `--human-algorithm-config-updates` lets you pass JSON overrides for the human
+    policy during evaluation (useful if your human model is itself MCTS-based).
+
+The larger-grid variants use a 3x wider world (`33x10x10`), preserve roughly the
+original goal footprint with `goal_x_slots=3`, and add clustered clutter blocks
+at the requested density so the reported summary remains directly comparable
+across seeds and variants.

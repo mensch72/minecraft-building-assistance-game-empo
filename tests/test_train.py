@@ -727,10 +727,11 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
     try:
         assert trainer.config["goal_loss_coeff"] == 0
         policy = cast(TorchPolicyV2, trainer.get_policy("human"))
+        model = cast(Any, policy.model)
         obs = trainer.workers.local_worker().foreach_env(lambda env: env.reset()[0])[0]
         empty_state_in: List[Any] = []
-        cast(Any, policy.model).compute_priors_and_value([obs], empty_state_in)
-        goal_logits = cast(Any, policy.model).goal_predictor()
+        model.compute_priors_and_value([obs], empty_state_in)
+        goal_logits = model.goal_predictor()
         assert torch.allclose(goal_logits, torch.zeros_like(goal_logits))
     finally:
         trainer.stop()

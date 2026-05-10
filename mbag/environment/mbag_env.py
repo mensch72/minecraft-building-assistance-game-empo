@@ -237,6 +237,8 @@ class MbagEnv(object):
             self.goal_blocks = self._generate_goal()
             self.any_step_since_last_reset = False
 
+        self._place_clutter_blocks()
+
         # Place players in the world.
         if self.config["random_start_locations"]:
             self._randomly_place_players()
@@ -404,11 +406,24 @@ class MbagEnv(object):
         # Generate a goal with buffer of at least 1 on the sides, top, and bottom.
         world_size = self.config["world_size"]
 
-        goal_size = (world_size[0] - 2, world_size[1] - 2, world_size[2] - 2)
+        # Determine the usable x width (palette column at the end is reserved when
+        # inf_blocks is False).
+        usable_x = world_size[0]
         if not self.config["abilities"]["inf_blocks"]:
-            goal_size = (world_size[0] - 3, world_size[1] - 2, world_size[2] - 2)
+            usable_x = world_size[0] - 1
 
         self.palette_x = world_size[0] - 1
+
+        # Determine effective number of x slots for random goal placement.
+        # Fall back to 1 slot if the world is too narrow to fit multiple slots.
+        goal_x_slots = self.config.get("goal_x_slots", 1)
+        slot_x_size = usable_x // goal_x_slots
+        if slot_x_size < 3:
+            goal_x_slots = 1
+            slot_x_size = usable_x
+
+        x_goal_size = slot_x_size - 2
+        goal_size = (x_goal_size, world_size[1] - 2, world_size[2] - 2)
 
         small_goal = self.goal_generator.generate_goal(goal_size)
 
@@ -416,12 +431,19 @@ class MbagEnv(object):
 
         shape = small_goal.size
 
-        goal.blocks[1 : shape[0] + 1, 1 : shape[1] + 1, 1 : shape[2] + 1] = (
-            small_goal.blocks
-        )
-        goal.block_states[1 : shape[0] + 1, 1 : shape[1] + 1, 1 : shape[2] + 1] = (
-            small_goal.block_states
-        )
+        # Choose a random x slot for goal placement.
+        if goal_x_slots > 1:
+            chosen_slot = random.randint(0, goal_x_slots - 1)
+            x_offset = 1 + chosen_slot * slot_x_size
+        else:
+            x_offset = 1
+
+        goal.blocks[
+            x_offset : x_offset + shape[0], 1 : shape[1] + 1, 1 : shape[2] + 1
+        ] = small_goal.blocks
+        goal.block_states[
+            x_offset : x_offset + shape[0], 1 : shape[1] + 1, 1 : shape[2] + 1
+        ] = small_goal.block_states
 
         if not self.config["abilities"]["inf_blocks"]:
             for index, block in enumerate(MinecraftBlocks.PLACEABLE_BLOCK_IDS):
@@ -432,6 +454,37 @@ class MbagEnv(object):
 
         # logger.debug(goal.blocks)
         return goal
+
+    def _place_clutter_blocks(self):
+        """Place random clutter blocks in the buildable area above the floor."""
+
+        num_clutter = self.config.get("num_clutter_blocks", 0)
+        if num_clutter <= 0:
+            return
+
+        clutter_bedrock_frac = self.config.get("clutter_bedrock_fraction", 0.5)
+        width, height, depth = self.config["world_size"]
+
+        # Avoid placing clutter in the palette column when resources are finite.
+        x_max = self.palette_x if not self.config["abilities"]["inf_blocks"] else width
+
+        placeable_block_ids = sorted(MinecraftBlocks.PLACEABLE_BLOCK_IDS)
+
+        attempts = 0
+        placed = 0
+        while placed < num_clutter and attempts < num_clutter * 10:
+            attempts += 1
+            x = random.randrange(x_max)
+            y = random.randint(2, height - 1)
+            z = random.randrange(depth)
+            if self.current_blocks.blocks[x, y, z] != MinecraftBlocks.AIR:
+                continue
+            if random.random() < clutter_bedrock_frac:
+                block_id = MinecraftBlocks.BEDROCK
+            else:
+                block_id = random.choice(placeable_block_ids)
+            self.current_blocks.blocks[x, y, z] = block_id
+            placed += 1
 
     def _copy_palette_from_goal(self):
         # Copy over the palette from the goal generator

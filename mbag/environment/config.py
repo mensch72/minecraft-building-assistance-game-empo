@@ -182,6 +182,30 @@ class MbagConfigDict(TypedDict, total=False):
     world_size: WorldSize
     random_start_locations: bool
 
+    num_clutter_blocks: int
+    """
+    Number of clutter blocks to scatter in the buildable area at the start of each
+    episode. Some will be bedrock (controlled by clutter_bedrock_fraction) and the
+    rest will be random placeable blocks. Bedrock clutter can only be removed by the
+    robot assistant; other clutter can be removed by any player.
+    """
+
+    clutter_bedrock_fraction: float
+    """
+    Fraction of clutter blocks (see num_clutter_blocks) that are bedrock.
+    Must be between 0.0 and 1.0.
+    """
+
+    goal_x_slots: int
+    """
+    Number of equal-width x-direction slots in which the goal building can be placed.
+    When greater than 1, each episode places the goal in a randomly chosen slot,
+    spreading buildings across the full width of the world. Requires world_size[0] to
+    be large enough so that each slot is at least 3 blocks wide; if not, falls back to
+    1 (full width). Combine with a larger world_size[0] (e.g. 3x the original) to
+    place buildings at random horizontal positions.
+    """
+
     goal_generator: Union[Type[GoalGenerator], str]
     goal_generator_config: GoalGeneratorConfig
 
@@ -245,12 +269,15 @@ DEFAULT_PLAYER_CONFIG: MbagPlayerConfigDict = {
 DEFAULT_CONFIG: MbagConfigDict = {
     "num_players": 1,
     "horizon": 50,
-    "world_size": (5, 5, 5),
+    "world_size": (15, 5, 5),
     "random_start_locations": False,
     "randomize_first_episode_length": False,
     "terminate_on_goal_completion": True,
     "truncate_on_no_progress_timesteps": None,
     "_check_for_overlapping_players": True,
+    "num_clutter_blocks": 0,
+    "clutter_bedrock_fraction": 0.5,
+    "goal_x_slots": 3,
     "goal_generator": TransformedGoalGenerator,
     "goal_generator_config": {
         "goal_generator": "random",

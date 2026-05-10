@@ -395,7 +395,13 @@ class MinecraftBlocks(object):
         """
 
         if is_human:
-            # Just assume human actions are valid.
+            # Humans cannot break bedrock.
+            if (
+                action_type == MbagAction.BREAK_BLOCK
+                and self.blocks[block_location] == MinecraftBlocks.BEDROCK
+            ):
+                return None
+            # Just assume other human actions are valid.
             assert player_location is not None
             if update_blocks:
                 if action_type == MbagAction.BREAK_BLOCK:

@@ -495,12 +495,12 @@ class MbagEnv(object):
             return  # World too short to place any clutter.
 
         # Build set of (x, y, z) voxels occupied by player bodies so we don't
-        # place clutter inside them.  Each player occupies two voxels: feet (y=2)
-        # and head (y=3).
+        # place clutter inside them.  Each player occupies two voxels: feet at
+        # py+0 and head at py+1.
         player_voxels: set = set()
         for loc in self.player_locations:
             px, py, pz = int(loc[0]), int(loc[1]), int(loc[2])
-            for dy in range(2):  # feet and head
+            for dy in range(2):  # dy=0: feet, dy=1: head
                 player_voxels.add((px, py + dy, pz))
 
         # Pre-compute the full list of candidate air positions in the clutter zone.
@@ -525,6 +525,9 @@ class MbagEnv(object):
 
         if len(world_pos) == 0:
             return
+
+        # Convert to float once so per-iteration distance arithmetic is cheap.
+        world_pos_f = world_pos.astype(float)
 
         # Maintain a running minimum-distance array: min_dists[i] = distance
         # from candidate i to the nearest already-placed clutter block.
@@ -560,9 +563,8 @@ class MbagEnv(object):
             self.current_blocks.blocks[x, y, z] = block_id
             placed_mask[chosen] = True
 
-            # Update running minimum distances using the newly placed block.
-            new_pos = world_pos[chosen].astype(float)
-            diffs = world_pos.astype(float) - new_pos  # (N, 3)
+            # Update running minimum distances using the newly placed block (O(N)).
+            diffs = world_pos_f - world_pos_f[chosen]  # (N, 3)
             new_dists = np.sqrt((diffs**2).sum(axis=1))
             min_dists = np.minimum(min_dists, new_dists)
 

@@ -514,11 +514,11 @@ class MbagEnv(object):
                 min_dists = np.sqrt((diffs**2).sum(axis=2)).min(axis=1)  # (N,)
                 raw_weights = 1.0 / (1.0 + min_dists)
                 weights = (raw_weights / raw_weights.sum()).tolist()
-                (pos_idx,) = random.choices(range(len(world_pos)), weights=weights)
+                pos_idx = random.choices(range(len(world_pos)), weights=weights, k=1)[0]
             else:
                 pos_idx = random.randrange(len(world_pos))
 
-            x, y, z = int(world_pos[pos_idx, 0]), int(world_pos[pos_idx, 1]), int(world_pos[pos_idx, 2])
+            x, y, z = world_pos[pos_idx]
 
             block_id = (
                 MinecraftBlocks.BEDROCK

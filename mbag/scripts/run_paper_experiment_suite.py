@@ -11,6 +11,7 @@ DEFAULT_WORLD_SIZE = (11, 10, 10)
 DEFAULT_ASSISTANT_EVAL_NUM_SIMULATIONS = 20
 DEFAULT_GOAL_SUBSET = "test"
 EXCLUDED_CLUTTER_VERTICAL_LAYERS = 3
+GOAL_COMPLETION_EPSILON = 1e-9
 
 
 @dataclass(frozen=True)
@@ -229,7 +230,7 @@ def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
         raise ValueError("metrics.json contained no episode_metrics to summarize")
     assistant_player_metrics = mean_metrics["player_metrics"][-1]
     goal_completion_rate = sum(
-        episode_metric["goal_percentage"] >= 1.0 - 1e-9
+        episode_metric["goal_percentage"] >= 1.0 - GOAL_COMPLETION_EPSILON
         for episode_metric in episode_metrics
     ) / len(episode_metrics)
     return {

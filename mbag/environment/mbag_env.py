@@ -462,7 +462,7 @@ class MbagEnv(object):
         if num_clutter <= 0:
             return
 
-        clutter_bedrock_frac = self.config.get("clutter_bedrock_fraction", 0.5)
+        clutter_bedrock_frac = max(0.0, min(1.0, self.config.get("clutter_bedrock_fraction", 0.5)))
         width, height, depth = self.config["world_size"]
 
         # Avoid placing clutter in the palette column when resources are finite.
@@ -475,7 +475,8 @@ class MbagEnv(object):
         while placed < num_clutter and attempts < num_clutter * 10:
             attempts += 1
             x = random.randrange(x_max)
-            y = random.randint(2, height - 1)
+            # Keep a 1-block buffer at the top to be consistent with _generate_goal.
+            y = random.randint(2, height - 2)
             z = random.randrange(depth)
             if self.current_blocks.blocks[x, y, z] != MinecraftBlocks.AIR:
                 continue

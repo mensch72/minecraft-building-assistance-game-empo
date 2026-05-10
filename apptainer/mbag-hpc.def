@@ -19,6 +19,9 @@ From: python:3.10-slim
 
     python -m pip install --upgrade pip setuptools wheel
     cd /opt/mbag-src
+    python -m pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cu121 \
+        'torch>=1.8'
     python -m pip install --no-cache-dir -e .[rllib]
 
 %runscript

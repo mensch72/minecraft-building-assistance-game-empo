@@ -40,6 +40,12 @@ Then run commands inside the container with:
 
     apptainer exec --nv mbag-hpc.sif python -m mbag.scripts.train --help
 
+The container recipe preinstalls a CUDA-enabled PyTorch wheel, so training and
+evaluation can use cluster GPUs when the job is launched with `--nv`. A quick
+smoke test is:
+
+    apptainer exec --nv mbag-hpc.sif python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"
+
 Use `--nv` when your cluster exposes NVIDIA GPUs to containers.
 
 ### Linting, testing, and type checking
@@ -210,6 +216,11 @@ Example:
         --human-run BC \
         --out-dir path/to/output_dir \
         --seeds 0 1 2
+
+Inside a scheduled GPU job, the suite will use the GPUs that Apptainer exposes
+to the container. The training configs already request GPUs for the
+paper-style AssistanceZero runs, so no extra launcher flag is needed beyond
+`apptainer exec --nv ...`.
 
 Useful options:
 

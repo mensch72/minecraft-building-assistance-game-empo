@@ -1,6 +1,5 @@
 import argparse
 import json
-import math
 import statistics
 import subprocess
 import sys
@@ -91,7 +90,7 @@ def get_default_variants(
         ),
         ExperimentVariant(
             name="cluttered_large_grid",
-            description="Paper baseline with a 3x wider grid and clustered clutter.",
+            description="Paper baseline with a 3x wider cluttered grid.",
             train_updates=train_env_updates,
             eval_env_updates=eval_env_updates,
         ),
@@ -223,8 +222,7 @@ def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
     episode_metrics = metrics["episode_metrics"]
     assistant_player_metrics = mean_metrics["player_metrics"][-1]
     goal_completion_rate = sum(
-        math.isclose(episode_metric["goal_percentage"], 1.0)
-        for episode_metric in episode_metrics
+        episode_metric["goal_percentage"] == 1.0 for episode_metric in episode_metrics
     ) / max(len(episode_metrics), 1)
     return {
         "goal_percentage": float(mean_metrics["goal_percentage"]),
@@ -258,7 +256,7 @@ def _aggregate_comparable_metrics(
         values = [metrics[key] for metrics in comparable_metrics_list]
         aggregate[key] = {
             "mean": float(statistics.fmean(values)),
-            "stdev": float(statistics.pstdev(values)),
+            "stdev": float(statistics.stdev(values)) if len(values) > 1 else 0.0,
         }
     return aggregate
 

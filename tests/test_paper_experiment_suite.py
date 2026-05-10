@@ -84,6 +84,7 @@ def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):
     assert command[:4] == ["python", "-m", "mbag.scripts.evaluate", "with"]
     assert 'runs=["BC","MbagAlphaZero"]' in command
     assert 'policy_ids=["human","assistant"]' in command
+    assert "explore=False" in command
     assert "seed=3" in command
     assert any('"num_simulations":20' in arg for arg in command)
 

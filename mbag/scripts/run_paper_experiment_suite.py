@@ -174,6 +174,7 @@ def build_evaluate_command(
         "runs": [human_run, "MbagAlphaZero"],
         "checkpoints": [human_checkpoint, assistant_checkpoint],
         "policy_ids": [human_policy_id, "assistant"],
+        "explore": False,
         "temperatures": [1.0, 1.0],
         "num_episodes": num_episodes,
         "num_workers": num_workers,

@@ -237,7 +237,8 @@ class MbagEnv(object):
             self.goal_blocks = self._generate_goal()
             self.any_step_since_last_reset = False
 
-        # Place players in the world.
+        # Place players in the world first so their spawn positions can be
+        # excluded from clutter placement.
         if self.config["random_start_locations"]:
             self._randomly_place_players()
         else:
@@ -249,6 +250,8 @@ class MbagEnv(object):
                 )
                 for i in range(self.config["num_players"])
             ]
+
+        self._place_clutter_blocks()
         self.player_directions = [(0, 0) for _ in range(self.config["num_players"])]
         self.player_inventories = [
             np.zeros((INVENTORY_NUM_SLOTS, 2), dtype=np.int32)
@@ -404,11 +407,29 @@ class MbagEnv(object):
         # Generate a goal with buffer of at least 1 on the sides, top, and bottom.
         world_size = self.config["world_size"]
 
-        goal_size = (world_size[0] - 2, world_size[1] - 2, world_size[2] - 2)
+        # Determine the usable x width (palette column at the end is reserved when
+        # inf_blocks is False).
+        usable_x = world_size[0]
         if not self.config["abilities"]["inf_blocks"]:
-            goal_size = (world_size[0] - 3, world_size[1] - 2, world_size[2] - 2)
+            usable_x = world_size[0] - 1
 
         self.palette_x = world_size[0] - 1
+
+        # Goal building width is 1/goal_x_slots of the buildable x area, so that
+        # buildings span roughly that fraction of the world width.  The building is
+        # then placed at a uniformly random x offset anywhere it fits (with 1-block
+        # buffers on each side), giving a continuous distribution rather than fixed
+        # slot boundaries.  If the world is too narrow to give each slot at least
+        # 3 blocks (matching the minimum meaningful size), fall back to using the
+        # full buildable width so small worlds are unaffected.
+        goal_x_slots = max(1, self.config.get("goal_x_slots", 1))
+        buildable_x = max(1, usable_x - 2)
+        if buildable_x >= goal_x_slots * 3:
+            goal_width = buildable_x // goal_x_slots
+        else:
+            goal_width = buildable_x
+
+        goal_size = (goal_width, world_size[1] - 2, world_size[2] - 2)
 
         small_goal = self.goal_generator.generate_goal(goal_size)
 
@@ -416,12 +437,19 @@ class MbagEnv(object):
 
         shape = small_goal.size
 
-        goal.blocks[1 : shape[0] + 1, 1 : shape[1] + 1, 1 : shape[2] + 1] = (
-            small_goal.blocks
-        )
-        goal.block_states[1 : shape[0] + 1, 1 : shape[1] + 1, 1 : shape[2] + 1] = (
-            small_goal.block_states
-        )
+        # Choose a uniformly random x offset in the valid range [1, usable_x-shape[0]-1].
+        max_x_offset = usable_x - shape[0] - 1
+        if max_x_offset >= 1:
+            x_offset = random.randint(1, max_x_offset)
+        else:
+            x_offset = 1
+
+        goal.blocks[
+            x_offset : x_offset + shape[0], 1 : shape[1] + 1, 1 : shape[2] + 1
+        ] = small_goal.blocks
+        goal.block_states[
+            x_offset : x_offset + shape[0], 1 : shape[1] + 1, 1 : shape[2] + 1
+        ] = small_goal.block_states
 
         if not self.config["abilities"]["inf_blocks"]:
             for index, block in enumerate(MinecraftBlocks.PLACEABLE_BLOCK_IDS):
@@ -432,6 +460,113 @@ class MbagEnv(object):
 
         # logger.debug(goal.blocks)
         return goal
+
+    def _place_clutter_blocks(self):
+        """Place clutter blocks above the floor.
+
+        Each block is placed at a randomly chosen air position in the clutter
+        zone (y >= 2, up to 1 below the ceiling).  After the first block is
+        placed, subsequent blocks are sampled with probability inversely
+        proportional to ``1 + distance`` to the nearest already-placed clutter
+        block, so that clutter naturally clusters and can stack several layers
+        high.
+
+        Player spawn positions (feet y=2 and head y=3) are excluded so that
+        no clutter block is placed inside a player at episode start.
+        """
+
+        num_clutter = self.config.get("num_clutter_blocks", 0)
+        if num_clutter <= 0:
+            return
+
+        clutter_bedrock_frac = max(
+            0.0, min(1.0, self.config.get("clutter_bedrock_fraction", 0.5))
+        )
+        width, height, depth = self.config["world_size"]
+
+        # Avoid placing clutter in the palette column when resources are finite.
+        x_max = self.palette_x if not self.config["abilities"]["inf_blocks"] else width
+
+        placeable_block_ids = sorted(MinecraftBlocks.PLACEABLE_BLOCK_IDS)
+
+        # Valid clutter zone: y in [2, height-2] (1-block buffer at top).
+        y_min, y_max_clutter = 2, height - 2
+        if y_min > y_max_clutter:
+            return  # World too short to place any clutter.
+
+        # Build set of (x, y, z) voxels occupied by player bodies so we don't
+        # place clutter inside them.  Each player occupies two voxels: feet at
+        # py+0 and head at py+1.
+        player_voxels: set = set()
+        for loc in self.player_locations:
+            px, py, pz = int(loc[0]), int(loc[1]), int(loc[2])
+            for dy in range(2):  # dy=0: feet, dy=1: head
+                player_voxels.add((px, py + dy, pz))
+
+        # Pre-compute the full list of candidate air positions in the clutter zone.
+        clutter_zone = self.current_blocks.blocks[:x_max, y_min : y_max_clutter + 1, :]
+        zone_air = np.argwhere(clutter_zone == MinecraftBlocks.AIR)
+        if len(zone_air) == 0:
+            return
+
+        # Convert zone-local y to world y.
+        world_pos = zone_air.copy()
+        world_pos[:, 1] += y_min
+
+        # Remove positions occupied by players.
+        if player_voxels:
+            keep = np.array(
+                [
+                    (int(p[0]), int(p[1]), int(p[2])) not in player_voxels
+                    for p in world_pos
+                ]
+            )
+            world_pos = world_pos[keep]
+
+        if len(world_pos) == 0:
+            return
+
+        # Convert to float once so per-iteration distance arithmetic is cheap.
+        world_pos_f = world_pos.astype(float)
+
+        # Maintain a running minimum-distance array: min_dists[i] = distance
+        # from candidate i to the nearest already-placed clutter block.
+        # Initially set to infinity (no clutter yet → uniform weights).
+        min_dists = np.full(len(world_pos), np.inf)
+        placed_mask = np.zeros(len(world_pos), dtype=bool)  # tracks placed cells
+
+        for _ in range(num_clutter):
+            # Select a candidate index.
+            available = ~placed_mask
+            if not available.any():
+                break
+
+            if np.isfinite(min_dists[available]).any():
+                # Weight inversely by 1 + distance (only among available cells).
+                raw_weights = 1.0 / (1.0 + min_dists[available])
+                weights = (raw_weights / raw_weights.sum()).tolist()
+                avail_indices = np.where(available)[0]
+                chosen = avail_indices[
+                    random.choices(range(len(avail_indices)), weights=weights, k=1)[0]
+                ]
+            else:
+                # No clutter yet — pick uniformly.
+                chosen = int(np.random.choice(np.where(available)[0]))
+
+            x, y, z = world_pos[chosen]
+
+            block_id = (
+                MinecraftBlocks.BEDROCK
+                if random.random() < clutter_bedrock_frac
+                else random.choice(placeable_block_ids)
+            )
+            self.current_blocks.blocks[x, y, z] = block_id
+            placed_mask[chosen] = True
+
+            # Update running minimum distances using the newly placed block (O(N)).
+            diffs = world_pos_f - world_pos_f[chosen]  # (N, 3)
+            new_dists = np.sqrt((diffs**2).sum(axis=1))
+            min_dists = np.minimum(min_dists, new_dists)
 
     def _copy_palette_from_goal(self):
         # Copy over the palette from the goal generator

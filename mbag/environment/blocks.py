@@ -395,7 +395,13 @@ class MinecraftBlocks(object):
         """
 
         if is_human:
-            # Just assume human actions are valid.
+            # Humans cannot break bedrock.
+            if (
+                action_type == MbagAction.BREAK_BLOCK
+                and self.blocks[block_location] == MinecraftBlocks.BEDROCK
+            ):
+                return None
+            # Just assume other human actions are valid.
             assert player_location is not None
             if update_blocks:
                 if action_type == MbagAction.BREAK_BLOCK:
@@ -418,11 +424,8 @@ class MinecraftBlocks(object):
                 # Can't place an unplaceable block.
                 return None
         else:
-            if self.blocks[block_location] in [
-                MinecraftBlocks.AIR,
-                MinecraftBlocks.BEDROCK,
-            ]:
-                # Can't break these blocks.
+            if self.blocks[block_location] == MinecraftBlocks.AIR:
+                # Can't break air.
                 return None
 
         viewpoint_click_candidates = self._get_viewpoint_click_candidates(

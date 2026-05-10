@@ -131,11 +131,11 @@ def test_goal_horizontal_offset_uses_full_buildable_range(monkeypatch):
     small_goal = MinecraftBlocks((3, 3, 3))
     small_goal.blocks[:] = cobblestone
 
-    randint_args = ()
+    captured_randint_args = ()
 
     def fake_randint(low, high):
-        nonlocal randint_args
-        randint_args = (low, high)
+        nonlocal captured_randint_args
+        captured_randint_args = (low, high)
         return high
 
     monkeypatch.setattr(mbag_env_module.random, "randint", fake_randint)
@@ -155,8 +155,18 @@ def test_goal_horizontal_offset_uses_full_buildable_range(monkeypatch):
 
     env.reset()
 
-    assert randint_args == (1, 7)
-    assert np.all(env.goal_blocks.blocks[7:10, 1:4, 1:4] == cobblestone)
+    expected_x_start = 7
+    expected_x_stop = expected_x_start + small_goal.size[0]
+    expected_y_slice = slice(1, 1 + small_goal.size[1])
+    expected_z_slice = slice(1, 1 + small_goal.size[2])
+
+    assert captured_randint_args == (1, expected_x_start)
+    assert np.all(
+        env.goal_blocks.blocks[
+            expected_x_start:expected_x_stop, expected_y_slice, expected_z_slice
+        ]
+        == cobblestone
+    )
 
 
 def test_truncate_on_no_progress():

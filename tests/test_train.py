@@ -739,6 +739,43 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
 
 @pytest.mark.uses_rllib
 @pytest.mark.slow
+@pytest.mark.timeout(120)
+def test_goal_agnostic_reapplied_after_checkpoint_load(
+    default_config, default_alpha_zero_config
+):
+    base_result = ex.run(
+        config_updates={
+            **default_config,
+            **default_alpha_zero_config,
+            "goal_agnostic": False,
+            "num_training_iters": 0,
+            "num_workers": 0,
+        }
+    ).result
+    assert base_result is not None
+
+    agnostic_trainer = load_trainer(
+        base_result["final_checkpoint"],
+        "MbagAlphaZero",
+        config_updates={"goal_agnostic": True, "goal_loss_coeff": 123},
+    )
+    try:
+        assert agnostic_trainer.config["goal_loss_coeff"] == 123
+        policy = cast(TorchPolicyV2, agnostic_trainer.get_policy("human"))
+        model = cast(Any, policy.model)
+        obs = agnostic_trainer.workers.local_worker().foreach_env(
+            lambda env: env.reset()[0]
+        )[0]
+        empty_state_in: List[Any] = []
+        model.compute_priors_and_value([obs], empty_state_in)
+        goal_logits = model.goal_predictor()
+        assert torch.allclose(goal_logits, torch.zeros_like(goal_logits))
+    finally:
+        agnostic_trainer.stop()
+
+
+@pytest.mark.uses_rllib
+@pytest.mark.slow
 @pytest.mark.timeout(60)
 def test_bc(default_config, default_bc_config):
     result = ex.run(

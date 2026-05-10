@@ -871,7 +871,10 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
                 **state_dict,
                 "fc_after_embedding.weight": resized_fc_weight,
             }
-        return super().load_state_dict(state_dict, *args, **kwargs)
+        result = super().load_state_dict(state_dict, *args, **kwargs)
+        if self.goal_agnostic:
+            self._set_goal_head_to_uniform()
+        return result
 
 
 class ResidualBlock(nn.Module):

@@ -816,6 +816,7 @@ def sacred_config(_log):  # noqa
             policy_loss_coeff=policy_loss_coeff,
             prev_policy_kl_coeff=prev_policy_kl_coeff,
             vf_loss_coeff=vf_loss_coeff,
+            goal_loss_coeff=goal_loss_coeff,
             prev_goal_kl_coeff=prev_goal_kl_coeff,
             prev_goal_kl_coeff_schedule=convert_dogmatics_to_standard(
                 prev_goal_kl_coeff_schedule

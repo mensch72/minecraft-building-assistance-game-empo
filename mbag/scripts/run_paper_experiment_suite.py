@@ -8,7 +8,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-
 DEFAULT_WORLD_SIZE = (11, 10, 10)
 DEFAULT_ASSISTANT_EVAL_NUM_SIMULATIONS = 20
 DEFAULT_GOAL_SUBSET = "test"
@@ -246,7 +245,7 @@ def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
 
 
 def _aggregate_comparable_metrics(
-    comparable_metrics_per_seed: Iterable[Mapping[str, float]]
+    comparable_metrics_per_seed: Iterable[Mapping[str, float]],
 ) -> Dict[str, Dict[str, float]]:
     comparable_metrics_list = list(comparable_metrics_per_seed)
     if not comparable_metrics_list:
@@ -361,12 +360,16 @@ def main() -> None:
                     variant=variant,
                 )
                 _run_command(eval_command, dry_run=False)
-                comparable_metrics = extract_comparable_metrics(_load_json(metrics_path))
+                comparable_metrics = extract_comparable_metrics(
+                    _load_json(metrics_path)
+                )
             variant_summary["runs"].append(
                 {
                     "seed": seed,
                     "train_command": train_command,
-                    "train_run_dir": None if train_run_dir is None else str(train_run_dir),
+                    "train_run_dir": (
+                        None if train_run_dir is None else str(train_run_dir)
+                    ),
                     "assistant_checkpoint": assistant_checkpoint,
                     "evaluate_command": eval_command,
                     "metrics_path": str(metrics_path),

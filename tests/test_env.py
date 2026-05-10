@@ -131,42 +131,42 @@ def test_goal_horizontal_offset_uses_full_buildable_range(monkeypatch):
     small_goal = MinecraftBlocks((3, 3, 3))
     small_goal.blocks[:] = cobblestone
 
-    captured_randint_args = ()
-
-    def fake_randint(low, high):
-        nonlocal captured_randint_args
-        captured_randint_args = (low, high)
-        return high
-
-    monkeypatch.setattr(mbag_env_module.random, "randint", fake_randint)
-
-    env = MbagEnv(
-        {
-            "world_size": (11, 5, 5),
-            "goal_generator": SetGoalGenerator,
-            "goal_generator_config": {"goals": [small_goal]},
-            "abilities": {
-                "teleportation": True,
-                "flying": True,
-                "inf_blocks": True,
-            },
-        }
-    )
-
-    env.reset()
-
-    expected_x_start = 7
-    expected_x_stop = expected_x_start + small_goal.size[0]
     expected_y_slice = slice(1, 1 + small_goal.size[1])
     expected_z_slice = slice(1, 1 + small_goal.size[2])
+    for expected_x_start in [1, 4, 7]:
+        captured_randint_args = None
 
-    assert captured_randint_args == (1, expected_x_start)
-    assert np.all(
-        env.goal_blocks.blocks[
-            expected_x_start:expected_x_stop, expected_y_slice, expected_z_slice
-        ]
-        == cobblestone
-    )
+        def fake_randint(low, high):
+            nonlocal captured_randint_args
+            captured_randint_args = (low, high)
+            return expected_x_start
+
+        monkeypatch.setattr(mbag_env_module.random, "randint", fake_randint)
+
+        env = MbagEnv(
+            {
+                "world_size": (11, 5, 5),
+                "goal_generator": SetGoalGenerator,
+                "goal_generator_config": {"goals": [small_goal]},
+                "abilities": {
+                    "teleportation": True,
+                    "flying": True,
+                    "inf_blocks": True,
+                },
+            }
+        )
+
+        env.reset()
+
+        expected_x_stop = expected_x_start + small_goal.size[0]
+
+        assert captured_randint_args == (1, 7)
+        assert np.all(
+            env.goal_blocks.blocks[
+                expected_x_start:expected_x_stop, expected_y_slice, expected_z_slice
+            ]
+            == cobblestone
+        )
 
 
 def test_truncate_on_no_progress():

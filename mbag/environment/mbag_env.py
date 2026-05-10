@@ -415,21 +415,10 @@ class MbagEnv(object):
 
         self.palette_x = world_size[0] - 1
 
-        # Goal building width is 1/goal_x_slots of the buildable x area, so that
-        # buildings span roughly that fraction of the world width.  The building is
-        # then placed at a uniformly random x offset anywhere it fits (with 1-block
-        # buffers on each side), giving a continuous distribution rather than fixed
-        # slot boundaries.  If the world is too narrow to give each slot at least
-        # 3 blocks (matching the minimum meaningful size), fall back to using the
-        # full buildable width so small worlds are unaffected.
-        goal_x_slots = max(1, self.config.get("goal_x_slots", 1))
-        buildable_x = max(1, usable_x - 2)
-        if buildable_x >= goal_x_slots * 3:
-            goal_width = buildable_x // goal_x_slots
-        else:
-            goal_width = buildable_x
-
-        goal_size = (goal_width, world_size[1] - 2, world_size[2] - 2)
+        # Let the goal generator use the full buildable width (with a 1-block
+        # buffer on each side). If it returns a narrower structure, place it at a
+        # uniformly random horizontal x offset anywhere it fits.
+        goal_size = (max(1, usable_x - 2), world_size[1] - 2, world_size[2] - 2)
 
         small_goal = self.goal_generator.generate_goal(goal_size)
 

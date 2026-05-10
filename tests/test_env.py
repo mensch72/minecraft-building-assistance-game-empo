@@ -4,11 +4,13 @@ from typing import cast
 
 import numpy as np
 
+import mbag.environment.mbag_env as mbag_env_module
 from mbag.agents.action_distributions import MbagActionDistribution
 from mbag.agents.heuristic_agents import LowestBlockAgent
 from mbag.environment.actions import MbagAction, MbagActionTuple
 from mbag.environment.blocks import MinecraftBlocks
 from mbag.environment.goals import TransformedGoalGenerator
+from mbag.environment.goals.simple import SetGoalGenerator
 from mbag.environment.mbag_env import DEFAULT_CONFIG, MbagEnv
 from mbag.environment.types import CURRENT_BLOCKS
 from mbag.evaluation.evaluator import MbagEvaluator
@@ -122,6 +124,39 @@ def test_goal_similarity_and_goal_percentage():
             assert initial_infos[0]["goal_percentage"] == 0
             assert episode.info_history[-1][0]["goal_similarity"] == 6 * 6 * 6
             assert episode.info_history[-1][0]["goal_percentage"] == 1
+
+
+def test_goal_horizontal_offset_uses_full_buildable_range(monkeypatch):
+    cobblestone = MinecraftBlocks.NAME2ID["cobblestone"]
+    small_goal = MinecraftBlocks((3, 3, 3))
+    small_goal.blocks[:] = cobblestone
+
+    randint_args = ()
+
+    def fake_randint(low, high):
+        nonlocal randint_args
+        randint_args = (low, high)
+        return high
+
+    monkeypatch.setattr(mbag_env_module.random, "randint", fake_randint)
+
+    env = MbagEnv(
+        {
+            "world_size": (11, 5, 5),
+            "goal_generator": SetGoalGenerator,
+            "goal_generator_config": {"goals": [small_goal]},
+            "abilities": {
+                "teleportation": True,
+                "flying": True,
+                "inf_blocks": True,
+            },
+        }
+    )
+
+    env.reset()
+
+    assert randint_args == (1, 7)
+    assert np.all(env.goal_blocks.blocks[7:10, 1:4, 1:4] == cobblestone)
 
 
 def test_truncate_on_no_progress():

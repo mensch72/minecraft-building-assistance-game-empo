@@ -230,7 +230,7 @@ Useful options:
   * `--human-algorithm-config-updates` lets you pass JSON overrides for the human
     policy during evaluation (useful if your human model is itself MCTS-based).
 
-The larger-grid variants use a 3x wider world (`33x10x10`), preserve roughly the
-original goal footprint with `goal_x_slots=3`, and add clustered clutter blocks
-at the requested density so the reported summary remains directly comparable
-across seeds and variants.
+The larger-grid variants use a 3x wider world (`33x10x10`) and add clustered
+clutter blocks at the requested density. Goals are sampled over the wider
+horizontal build area, so the suite measures how the assistant handles clutter
+when houses can appear anywhere across that larger grid.

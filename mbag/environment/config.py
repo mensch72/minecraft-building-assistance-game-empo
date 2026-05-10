@@ -196,20 +196,6 @@ class MbagConfigDict(TypedDict, total=False):
     Must be between 0.0 and 1.0.
     """
 
-    goal_x_slots: int
-    """
-    Controls the width of the goal building relative to the buildable x area.
-    When set to N, the goal building width is approximately 1/N of the full
-    buildable x width, and the building is placed at a uniformly random
-    horizontal x position anywhere it fits (with a 1-block buffer on each
-    side).  Use ``goal_x_slots=1`` (the default) to use the full buildable
-    width.  Values less than 1 are treated as 1.  If the world is too narrow
-    to give each slot at least 3 blocks, the goal uses the full buildable
-    width regardless of this setting.  Combine with a larger
-    ``world_size[0]`` (e.g. 3× the original) to place smaller buildings at
-    random horizontal positions across the world.
-    """
-
     goal_generator: Union[Type[GoalGenerator], str]
     goal_generator_config: GoalGeneratorConfig
 
@@ -281,7 +267,6 @@ DEFAULT_CONFIG: MbagConfigDict = {
     "_check_for_overlapping_players": True,
     "num_clutter_blocks": 0,
     "clutter_bedrock_fraction": 0.5,
-    "goal_x_slots": 3,
     "goal_generator": TransformedGoalGenerator,
     "goal_generator_config": {
         "goal_generator": "random",

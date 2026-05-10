@@ -57,7 +57,6 @@ def _compute_large_grid_variant(
         "width": large_world_size[0],
         "height": large_world_size[1],
         "depth": large_world_size[2],
-        "goal_x_slots": x_scale,
         "num_clutter_blocks": num_clutter_blocks,
         "clutter_bedrock_fraction": clutter_bedrock_fraction,
         "world_size": large_world_size,
@@ -77,13 +76,11 @@ def get_default_variants(
         "width": large_grid_config["width"],
         "height": large_grid_config["height"],
         "depth": large_grid_config["depth"],
-        "goal_x_slots": large_grid_config["goal_x_slots"],
         "num_clutter_blocks": large_grid_config["num_clutter_blocks"],
         "clutter_bedrock_fraction": large_grid_config["clutter_bedrock_fraction"],
     }
     eval_env_updates = {
         "world_size": large_grid_config["world_size"],
-        "goal_x_slots": large_grid_config["goal_x_slots"],
         "num_clutter_blocks": large_grid_config["num_clutter_blocks"],
         "clutter_bedrock_fraction": large_grid_config["clutter_bedrock_fraction"],
     }

@@ -20,7 +20,6 @@ def test_default_variants_include_required_suite_members():
     ]
     large_grid_variant = variants[1]
     assert large_grid_variant.train_updates["width"] == 33
-    assert large_grid_variant.train_updates["goal_x_slots"] == 3
     assert large_grid_variant.train_updates["num_clutter_blocks"] > 0
     assert variants[2].train_updates["goal_agnostic"] is True
 
@@ -33,7 +32,6 @@ def test_build_train_command_carries_seed_and_variant_updates(tmp_path):
             "width": 33,
             "height": 10,
             "depth": 10,
-            "goal_x_slots": 3,
             "num_clutter_blocks": 116,
             "clutter_bedrock_fraction": 0.5,
             "goal_agnostic": True,
@@ -54,7 +52,6 @@ def test_build_train_command_carries_seed_and_variant_updates(tmp_path):
     assert "assistancezero_assistant" in command
     assert "seed=7" in command
     assert "goal_agnostic=True" in command
-    assert "goal_x_slots=3" in command
     assert "num_clutter_blocks=116" in command
 
 
@@ -78,7 +75,6 @@ def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):
             train_updates={},
             eval_env_updates={
                 "world_size": (33, 10, 10),
-                "goal_x_slots": 3,
                 "num_clutter_blocks": 116,
                 "clutter_bedrock_fraction": 0.5,
             },
@@ -89,7 +85,6 @@ def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):
     assert 'runs=["BC","MbagAlphaZero"]' in command
     assert 'policy_ids=["human","assistant"]' in command
     assert "seed=3" in command
-    assert any("goal_x_slots" in arg for arg in command)
     assert any('"num_simulations":20' in arg for arg in command)
 
 

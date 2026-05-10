@@ -19,13 +19,14 @@ try:
 
     from mbag.rllib.alpha_zero.alpha_zero_policy import C_PUCT
     from mbag.rllib.mixture_model import MixtureModel
-    from mbag.rllib.torch_models import MbagTransformerModel
+    from mbag.rllib.torch_models import Conv3d1x1x1, MbagTransformerModel
     from mbag.rllib.training_utils import load_trainer
     from mbag.scripts.create_mixture_model import ex as create_mixture_model_ex
     from mbag.scripts.evaluate import ex as evaluate_ex
     from mbag.scripts.rollout import ex as rollout_ex
     from mbag.scripts.train import ex
 except ImportError:
+    Conv3d1x1x1 = object  # type: ignore
     MbagTransformerModel = object  # type: ignore
 
 
@@ -686,6 +687,37 @@ def test_alpha_zero_goal_predictor_kl(default_config, default_alpha_zero_config)
 
     assert prev_goal_kls[10] < prev_goal_kls[0]
     assert 0 < prev_goal_kls[0] < 1
+
+
+@pytest.mark.uses_rllib
+@pytest.mark.slow
+@pytest.mark.timeout(120)
+def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
+    result = ex.run(
+        config_updates={
+            **default_config,
+            **default_alpha_zero_config,
+            "goal_agnostic": True,
+            "goal_loss_coeff": 123,
+            "num_training_iters": 0,
+            "num_workers": 0,
+        }
+    ).result
+    assert result is not None
+
+    trainer = load_trainer(result["final_checkpoint"], "MbagAlphaZero")
+    try:
+        assert trainer.config["goal_loss_coeff"] == 0
+        policy = cast(TorchPolicyV2, trainer.get_policy("human"))
+        final_goal_layer = policy.model.goal_head[-1]
+        assert isinstance(final_goal_layer, Conv3d1x1x1)
+        assert torch.all(final_goal_layer.weight == 0)
+        assert not final_goal_layer.weight.requires_grad
+        if final_goal_layer.bias is not None:
+            assert torch.all(final_goal_layer.bias == 0)
+            assert not final_goal_layer.bias.requires_grad
+    finally:
+        trainer.stop()
 
 
 @pytest.mark.uses_rllib

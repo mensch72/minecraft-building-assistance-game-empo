@@ -148,6 +148,8 @@ class MbagModelConfig(TypedDict, total=False):
     """Whether to input the last action taken to the network."""
     use_prev_other_agent_action: bool
     """Whether to input the last action taken by other agents to the network."""
+    goal_agnostic: bool
+    """Force goal prediction to be uniform and non-trainable at the final layer."""
 
 
 DEFAULT_CONFIG: MbagModelConfig = {
@@ -170,6 +172,7 @@ DEFAULT_CONFIG: MbagModelConfig = {
     "use_prev_blocks": False,
     "use_prev_action": False,
     "use_prev_other_agent_action": False,
+    "goal_agnostic": False,
 }
 
 
@@ -237,6 +240,7 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         self.use_prev_blocks = extra_config["use_prev_blocks"]
         self.use_prev_action = extra_config["use_prev_action"]
         self.use_prev_other_agent_action = extra_config["use_prev_other_agent_action"]
+        self.goal_agnostic = extra_config["goal_agnostic"]
 
         self.action_mapping = torch.from_numpy(
             MbagActionDistribution.get_action_mapping(self.env_config)
@@ -267,6 +271,8 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
         self.action_head = self._construct_action_head()
         self.value_head = self._construct_value_head()
         self.goal_head = self._construct_goal_head()
+        if self.goal_agnostic:
+            self._set_goal_head_to_uniform()
 
         if self.use_per_location_lstm:
             assert self.vf_share_layers
@@ -409,6 +415,16 @@ class MbagTorchModel(TorchModelV2, nn.Module, ABC):
             nn.LeakyReLU(),
             Conv3d1x1x1(self.hidden_size, MinecraftBlocks.NUM_BLOCKS),
         )
+
+    def _set_goal_head_to_uniform(self) -> None:
+        final_layer = self.goal_head[-1]
+        assert isinstance(final_layer, Conv3d1x1x1)
+        with torch.no_grad():
+            final_layer.weight.zero_()
+            final_layer.weight.requires_grad = False
+            if final_layer.bias is not None:
+                final_layer.bias.zero_()
+                final_layer.bias.requires_grad = False
 
     def _get_embedded_actions(
         self,

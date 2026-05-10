@@ -371,6 +371,7 @@ def sacred_config(_log):  # noqa
     policy_loss_coeff = 1
     prev_policy_kl_coeff = 0
     goal_loss_coeff = 0.5
+    goal_agnostic = False
     prev_goal_kl_coeff = 0
     prev_goal_kl_coeff_schedule = None
     place_block_loss_coeff = 1
@@ -433,6 +434,8 @@ def sacred_config(_log):  # noqa
         "max_seq_len": max_seq_len,
         "vf_share_layers": vf_share_layers,
     }
+    if goal_agnostic:
+        goal_loss_coeff = 0
     if "convolutional" in model:
         conv_config: MbagConvolutionalModelConfig = {
             "env_config": cast(MbagConfigDict, dict(environment_params)),
@@ -461,6 +464,7 @@ def sacred_config(_log):  # noqa
             "num_value_layers": num_value_layers,
             "interleave_lstm_every": interleave_lstm_every,
             "lstm_size": lstm_size,
+            "goal_agnostic": goal_agnostic,
         }
         model_config["custom_model_config"] = conv_config
     elif "transformer" in model:
@@ -491,6 +495,7 @@ def sacred_config(_log):  # noqa
             "line_of_sight_masking": line_of_sight_masking,
             "scale_obs": scale_obs,
             "vf_scale": vf_scale,
+            "goal_agnostic": goal_agnostic,
         }
         model_config["custom_model_config"] = transformer_config
     elif "unet" in model:
@@ -521,6 +526,7 @@ def sacred_config(_log):  # noqa
             "num_value_layers": num_value_layers,
             "use_lstm": use_lstm,
             "lstm_size": lstm_size,
+            "goal_agnostic": goal_agnostic,
         }
         model_config["custom_model_config"] = unet_config
 

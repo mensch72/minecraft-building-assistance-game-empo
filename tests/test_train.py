@@ -28,6 +28,8 @@ try:
 except ImportError:
     MbagTransformerModel = object  # type: ignore
 
+TEST_GOAL_LOSS_COEFF = 123
+
 
 @pytest.fixture(scope="session")
 def default_config():
@@ -697,7 +699,7 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
             **default_config,
             **default_alpha_zero_config,
             "goal_agnostic": False,
-            "goal_loss_coeff": 123,
+            "goal_loss_coeff": TEST_GOAL_LOSS_COEFF,
             "num_training_iters": 0,
             "num_workers": 0,
         }
@@ -707,7 +709,7 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
         non_agnostic_result["final_checkpoint"], "MbagAlphaZero"
     )
     try:
-        assert non_agnostic_trainer.config["goal_loss_coeff"] == 123
+        assert non_agnostic_trainer.config["goal_loss_coeff"] == TEST_GOAL_LOSS_COEFF
     finally:
         non_agnostic_trainer.stop()
 
@@ -716,7 +718,7 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
             **default_config,
             **default_alpha_zero_config,
             "goal_agnostic": True,
-            "goal_loss_coeff": 123,
+            "goal_loss_coeff": TEST_GOAL_LOSS_COEFF,
             "num_training_iters": 0,
             "num_workers": 0,
         }
@@ -757,10 +759,13 @@ def test_goal_agnostic_reapplied_after_checkpoint_load(
     agnostic_trainer = load_trainer(
         base_result["final_checkpoint"],
         "MbagAlphaZero",
-        config_updates={"goal_agnostic": True, "goal_loss_coeff": 123},
+        config_updates={
+            "goal_agnostic": True,
+            "goal_loss_coeff": TEST_GOAL_LOSS_COEFF,
+        },
     )
     try:
-        assert agnostic_trainer.config["goal_loss_coeff"] == 123
+        assert agnostic_trainer.config["goal_loss_coeff"] == TEST_GOAL_LOSS_COEFF
         policy = cast(TorchPolicyV2, agnostic_trainer.get_policy("human"))
         model = cast(Any, policy.model)
         obs = agnostic_trainer.workers.local_worker().foreach_env(

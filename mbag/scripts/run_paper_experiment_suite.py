@@ -189,6 +189,7 @@ def build_evaluate_command(
         python_executable,
         "-m",
         "mbag.scripts.evaluate",
+        "with",
         *_make_override_args(overrides),
     ]
 

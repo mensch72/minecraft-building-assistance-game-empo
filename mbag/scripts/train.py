@@ -110,7 +110,7 @@ def sacred_config(_log):  # noqa
     width = 11
     height = 10
     depth = 10
-    goal_x_slots = 1
+    goal_x_slots = 3
     num_clutter_blocks = 0
     clutter_bedrock_fraction = 0.5
     random_start_locations = True

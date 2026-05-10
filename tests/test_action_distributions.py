@@ -134,10 +134,10 @@ def test_mask():
         == False
     )
 
-    # Can't break bedrock or air.
-    assert mask[0, MbagActionDistribution.BREAK_BLOCK, 1, 0, 1] == False
+    # Can't break air.
     assert mask[0, MbagActionDistribution.BREAK_BLOCK, 1, 2, 2] == False
-    # Can break dirt and planks.
+    # Can break bedrock, dirt and planks.
+    assert mask[0, MbagActionDistribution.BREAK_BLOCK, 1, 0, 1] == True
     assert mask[0, MbagActionDistribution.BREAK_BLOCK, 1, 1, 1] == True
     assert mask[0, MbagActionDistribution.BREAK_BLOCK, 1, 2, 1] == True
 

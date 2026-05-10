@@ -198,12 +198,16 @@ class MbagConfigDict(TypedDict, total=False):
 
     goal_x_slots: int
     """
-    Number of equal-width x-direction slots in which the goal building can be placed.
-    When greater than 1, each episode places the goal in a randomly chosen slot,
-    spreading buildings across the full width of the world. Requires world_size[0] to
-    be large enough so that each slot is at least 3 blocks wide; if not, falls back to
-    1 (full width). Combine with a larger world_size[0] (e.g. 3x the original) to
-    place buildings at random horizontal positions.
+    Controls the width of the goal building relative to the buildable x area.
+    When set to N, the goal building width is approximately 1/N of the full
+    buildable x width, and the building is placed at a uniformly random
+    horizontal x position anywhere it fits (with a 1-block buffer on each
+    side).  Use ``goal_x_slots=1`` (the default) to use the full buildable
+    width.  Values less than 1 are treated as 1.  If the world is too narrow
+    to give each slot at least 3 blocks, the goal uses the full buildable
+    width regardless of this setting.  Combine with a larger
+    ``world_size[0]`` (e.g. 3× the original) to place smaller buildings at
+    random horizontal positions across the world.
     """
 
     goal_generator: Union[Type[GoalGenerator], str]

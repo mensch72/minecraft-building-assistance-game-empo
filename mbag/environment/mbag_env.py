@@ -237,9 +237,8 @@ class MbagEnv(object):
             self.goal_blocks = self._generate_goal()
             self.any_step_since_last_reset = False
 
-        self._place_clutter_blocks()
-
-        # Place players in the world.
+        # Place players in the world first so their spawn positions can be
+        # excluded from clutter placement.
         if self.config["random_start_locations"]:
             self._randomly_place_players()
         else:
@@ -251,6 +250,8 @@ class MbagEnv(object):
                 )
                 for i in range(self.config["num_players"])
             ]
+
+        self._place_clutter_blocks()
         self.player_directions = [(0, 0) for _ in range(self.config["num_players"])]
         self.player_inventories = [
             np.zeros((INVENTORY_NUM_SLOTS, 2), dtype=np.int32)
@@ -421,7 +422,7 @@ class MbagEnv(object):
         # slot boundaries.  If the world is too narrow to give each slot at least
         # 3 blocks (matching the minimum meaningful size), fall back to using the
         # full buildable width so small worlds are unaffected.
-        goal_x_slots = self.config.get("goal_x_slots", 1)
+        goal_x_slots = max(1, self.config.get("goal_x_slots", 1))
         buildable_x = max(1, usable_x - 2)
         if buildable_x >= goal_x_slots * 3:
             goal_width = buildable_x // goal_x_slots
@@ -469,6 +470,9 @@ class MbagEnv(object):
         proportional to ``1 + distance`` to the nearest already-placed clutter
         block, so that clutter naturally clusters and can stack several layers
         high.
+
+        Player spawn positions (feet y=2 and head y=3) are excluded so that
+        no clutter block is placed inside a player at episode start.
         """
 
         num_clutter = self.config.get("num_clutter_blocks", 0)
@@ -490,35 +494,63 @@ class MbagEnv(object):
         if y_min > y_max_clutter:
             return  # World too short to place any clutter.
 
-        # Track placed clutter positions (world coords) for distance weighting.
-        clutter_positions: List[Tuple[int, int, int]] = []
+        # Build set of (x, y, z) voxels occupied by player bodies so we don't
+        # place clutter inside them.  Each player occupies two voxels: feet (y=2)
+        # and head (y=3).
+        player_voxels: set = set()
+        for loc in self.player_locations:
+            px, py, pz = int(loc[0]), int(loc[1]), int(loc[2])
+            for dy in range(2):  # feet and head
+                player_voxels.add((px, py + dy, pz))
+
+        # Pre-compute the full list of candidate air positions in the clutter zone.
+        clutter_zone = self.current_blocks.blocks[:x_max, y_min : y_max_clutter + 1, :]
+        zone_air = np.argwhere(clutter_zone == MinecraftBlocks.AIR)
+        if len(zone_air) == 0:
+            return
+
+        # Convert zone-local y to world y.
+        world_pos = zone_air.copy()
+        world_pos[:, 1] += y_min
+
+        # Remove positions occupied by players.
+        if player_voxels:
+            keep = np.array(
+                [
+                    (int(p[0]), int(p[1]), int(p[2])) not in player_voxels
+                    for p in world_pos
+                ]
+            )
+            world_pos = world_pos[keep]
+
+        if len(world_pos) == 0:
+            return
+
+        # Maintain a running minimum-distance array: min_dists[i] = distance
+        # from candidate i to the nearest already-placed clutter block.
+        # Initially set to infinity (no clutter yet → uniform weights).
+        min_dists = np.full(len(world_pos), np.inf)
+        placed_mask = np.zeros(len(world_pos), dtype=bool)  # tracks placed cells
 
         for _ in range(num_clutter):
-            # Gather all air positions inside the clutter zone.
-            clutter_zone = self.current_blocks.blocks[
-                :x_max, y_min : y_max_clutter + 1, :
-            ]
-            zone_air = np.argwhere(clutter_zone == MinecraftBlocks.AIR)
-            if len(zone_air) == 0:
-                break  # No space left.
+            # Select a candidate index.
+            available = ~placed_mask
+            if not available.any():
+                break
 
-            # zone_air[:,1] is offset by y_min from world y; convert to world coords.
-            world_pos = zone_air.copy()
-            world_pos[:, 1] += y_min
-
-            if clutter_positions:
-                # Weight each candidate inversely by 1 + distance to nearest clutter.
-                clutter_arr = np.array(clutter_positions, dtype=float)
-                cand_arr = world_pos.astype(float)
-                diffs = cand_arr[:, None, :] - clutter_arr[None, :, :]  # (N,K,3)
-                min_dists = np.sqrt((diffs**2).sum(axis=2)).min(axis=1)  # (N,)
-                raw_weights = 1.0 / (1.0 + min_dists)
+            if np.isfinite(min_dists[available]).any():
+                # Weight inversely by 1 + distance (only among available cells).
+                raw_weights = 1.0 / (1.0 + min_dists[available])
                 weights = (raw_weights / raw_weights.sum()).tolist()
-                pos_idx = random.choices(range(len(world_pos)), weights=weights, k=1)[0]
+                avail_indices = np.where(available)[0]
+                chosen = avail_indices[
+                    random.choices(range(len(avail_indices)), weights=weights, k=1)[0]
+                ]
             else:
-                pos_idx = random.randrange(len(world_pos))
+                # No clutter yet — pick uniformly.
+                chosen = int(np.random.choice(np.where(available)[0]))
 
-            x, y, z = world_pos[pos_idx]
+            x, y, z = world_pos[chosen]
 
             block_id = (
                 MinecraftBlocks.BEDROCK
@@ -526,7 +558,13 @@ class MbagEnv(object):
                 else random.choice(placeable_block_ids)
             )
             self.current_blocks.blocks[x, y, z] = block_id
-            clutter_positions.append((x, y, z))
+            placed_mask[chosen] = True
+
+            # Update running minimum distances using the newly placed block.
+            new_pos = world_pos[chosen].astype(float)
+            diffs = world_pos.astype(float) - new_pos  # (N, 3)
+            new_dists = np.sqrt((diffs**2).sum(axis=1))
+            min_dists = np.minimum(min_dists, new_dists)
 
     def _copy_palette_from_goal(self):
         # Copy over the palette from the goal generator

@@ -320,12 +320,9 @@ class MbagActionDistribution(object):
             if action_type not in valid_action_types:
                 mask[:, channel] = False
 
-        # We can't break air or bedrock.
+        # We can't break air.
         mask[:, MbagActionDistribution.BREAK_BLOCK][
-            (
-                (world_obs[:, CURRENT_BLOCKS] == MinecraftBlocks.AIR)
-                | (world_obs[:, CURRENT_BLOCKS] == MinecraftBlocks.BEDROCK)
-            )
+            world_obs[:, CURRENT_BLOCKS] == MinecraftBlocks.AIR
         ] = False
 
         # Can't place air or bedrock.

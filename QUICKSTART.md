@@ -7,7 +7,7 @@ This guide gives the fastest path to run MBAG locally on CPU and on an HPC clust
 Use Python 3.8–3.10 (3.10 recommended).
 
 ```bash
-cd /home/runner/work/minecraft-building-assistance-game-empo/minecraft-building-assistance-game-empo
+cd /path/to/minecraft-building-assistance-game-empo
 python3.10 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel
@@ -68,7 +68,7 @@ Outputs/checkpoints are written under `data/logs/...`. The command logs the fina
 Build the container once:
 
 ```bash
-cd /home/runner/work/minecraft-building-assistance-game-empo/minecraft-building-assistance-game-empo
+cd /path/to/minecraft-building-assistance-game-empo
 apptainer build mbag-hpc.sif apptainer/mbag-hpc.def
 ```
 

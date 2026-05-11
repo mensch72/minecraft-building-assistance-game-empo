@@ -1,17 +1,44 @@
 import argparse
 import json
+import re
 import statistics
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple, cast
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WORLD_SIZE = (11, 10, 10)
 DEFAULT_ASSISTANT_EVAL_NUM_SIMULATIONS = 20
 DEFAULT_GOAL_SUBSET = "test"
 EXCLUDED_CLUTTER_VERTICAL_LAYERS = 3
 GOAL_COMPLETION_EPSILON = 1e-9
+QUICK_SEEDS = [0]
+QUICK_NUM_EPISODES = 1
+QUICK_NUM_WORKERS = 0
+QUICK_ASSISTANT_NUM_SIMULATIONS = 1
+QUICK_EVAL_HORIZON = 16
+QUICK_TRUNCATE_ON_NO_PROGRESS_TIMESTEPS = 8
+LOCAL_CPU_TRAIN_UPDATES = {
+    "num_training_iters": 1,
+    "num_workers": 0,
+    "num_envs_per_worker": 1,
+    "sample_batch_size": 256,
+    "train_batch_size": 64,
+    "sgd_minibatch_size": 128,
+    "num_simulations": 1,
+    "replay_buffer_size": 256,
+    "simple_optimizer": True,
+    "num_gpus": 0,
+    "num_gpus_per_worker": 0,
+}
+QUICK_TRAIN_UPDATES = {
+    **LOCAL_CPU_TRAIN_UPDATES,
+    "num_training_iters": 0,
+}
+CHECKPOINT_DIR_PATTERN = re.compile(r"checkpoint_[0-9]+$")
+CHECKPOINT_STATE_FILES = ("algorithm_state.pkl", "algorithm_state.msgpck")
 
 
 @dataclass(frozen=True)
@@ -28,7 +55,7 @@ def _sacred_value(value: Any) -> str:
     if value is None:
         return "None"
     if isinstance(value, (dict, list, tuple)):
-        return json.dumps(value, separators=(",", ":"))
+        return repr(value)
     return str(value)
 
 
@@ -117,6 +144,7 @@ def build_train_command(
     experiment_dir: Path,
     seed: int,
     variant: ExperimentVariant,
+    train_config_updates: Mapping[str, Any] | None = None,
 ) -> List[str]:
     overrides: Dict[str, Any] = {
         "experiment_dir": str(experiment_dir),
@@ -124,6 +152,8 @@ def build_train_command(
         "checkpoint_name": human_checkpoint_name,
         "seed": seed,
     }
+    if train_config_updates is not None:
+        overrides.update(train_config_updates)
     overrides.update(variant.train_updates)
     return [
         python_executable,
@@ -150,15 +180,20 @@ def build_evaluate_command(
     assistant_num_simulations: int,
     goal_subset: str,
     variant: ExperimentVariant,
+    horizon: int = 1500,
 ) -> List[str]:
     env_config_updates: Dict[str, Any] = {
-        "horizon": 1500,
+        "horizon": horizon,
         "random_start_locations": True,
         "randomize_first_episode_length": False,
         "terminate_on_goal_completion": True,
         "truncate_on_no_progress_timesteps": None,
         "goal_generator_config": {"goal_generator_config": {"subset": goal_subset}},
     }
+    if horizon <= QUICK_EVAL_HORIZON:
+        env_config_updates[
+            "truncate_on_no_progress_timesteps"
+        ] = QUICK_TRUNCATE_ON_NO_PROGRESS_TIMESTEPS
     env_config_updates.update(variant.eval_env_updates)
     algorithm_config_updates = [
         dict(human_algorithm_config_updates),
@@ -217,9 +252,52 @@ def _find_final_checkpoint(run_dir: Path) -> Path:
     return checkpoints[-1]
 
 
+def _is_rllib_checkpoint_dir(path: Path) -> bool:
+    return path.is_dir() and (
+        CHECKPOINT_DIR_PATTERN.fullmatch(path.name) is not None
+        or (path / "rllib_checkpoint.json").exists()
+        or any((path / filename).exists() for filename in CHECKPOINT_STATE_FILES)
+    )
+
+
+def resolve_checkpoint_path(path_str: str) -> Path:
+    path = Path(path_str).expanduser().resolve()
+
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    if path.is_file():
+        if path.name in {"rllib_checkpoint.json", *CHECKPOINT_STATE_FILES}:
+            return path.parent
+        raise ValueError(
+            f"{path} is not a supported checkpoint input. Pass an RLlib checkpoint "
+            "directory, a Sacred run directory, or a Sacred experiment directory."
+        )
+
+    if _is_rllib_checkpoint_dir(path):
+        return path
+
+    run_dir_candidates = [
+        child for child in path.iterdir() if child.is_dir() and child.name.isdigit()
+    ]
+    if run_dir_candidates:
+        latest_run_dir = max(run_dir_candidates, key=lambda child: int(child.name))
+        return _find_final_checkpoint(latest_run_dir)
+
+    try:
+        return _find_final_checkpoint(path)
+    except FileNotFoundError as exc:
+        raise ValueError(
+            f"{path} does not resolve to a usable human checkpoint. Pass the final "
+            "RLlib checkpoint directory itself (for example checkpoint_000100), a "
+            "Sacred run directory containing checkpoints, or an experiment directory "
+            "containing numbered Sacred runs."
+        ) from exc
+
+
 def _load_json(path: Path) -> Dict[str, Any]:
     with path.open() as file:
-        return json.load(file)
+        return cast(Dict[str, Any], json.load(file))
 
 
 def extract_comparable_metrics(metrics: Mapping[str, Any]) -> Dict[str, float]:
@@ -279,7 +357,16 @@ def _parse_args() -> argparse.Namespace:
             "goal_agnostic enabled."
         )
     )
-    parser.add_argument("--human-checkpoint", required=True)
+    parser.add_argument(
+        "--human-checkpoint",
+        required=True,
+        help=(
+            "Path to the human model checkpoint input. This may be the RLlib "
+            "checkpoint directory itself, a Sacred run directory that contains "
+            "checkpoints, or an experiment directory that contains numbered Sacred "
+            "runs."
+        ),
+    )
     parser.add_argument("--human-run", default="BC")
     parser.add_argument("--human-policy-id", default="human")
     parser.add_argument("--human-algorithm-config-updates", default="{}")
@@ -296,32 +383,68 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--clutter-density", type=float, default=0.05)
     parser.add_argument("--clutter-bedrock-fraction", type=float, default=0.5)
     parser.add_argument("--python-executable", default=sys.executable)
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help=(
+            "Run the full suite workflow with minimal settings: keep all train and "
+            "evaluate steps, but force seeds=0, zero training iterations, "
+            "num_workers=0, assistant_num_simulations=1, and horizon=16."
+        ),
+    )
+    parser.add_argument(
+        "--local-cpu",
+        action="store_true",
+        help=(
+            "Force CPU-safe assistant training overrides intended for local laptop "
+            "runs: one training iteration, no rollout workers, one env, small batch "
+            "sizes, a reduced MCTS budget, and zero GPU requests."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
 
+def _make_train_config_updates(args: argparse.Namespace) -> Dict[str, Any]:
+    if args.quick:
+        return dict(QUICK_TRAIN_UPDATES)
+    if args.local_cpu:
+        return dict(LOCAL_CPU_TRAIN_UPDATES)
+    return {}
+
+
 def main() -> None:
     args = _parse_args()
+    if args.quick:
+        args.seeds = QUICK_SEEDS
+        args.num_episodes = QUICK_NUM_EPISODES
+        args.num_workers = QUICK_NUM_WORKERS
+        args.assistant_num_simulations = QUICK_ASSISTANT_NUM_SIMULATIONS
+
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    train_config_updates = _make_train_config_updates(args)
 
-    if not args.dry_run and not Path(args.human_checkpoint).exists():
-        raise FileNotFoundError(args.human_checkpoint)
+    human_checkpoint = args.human_checkpoint
+    if not args.dry_run:
+        human_checkpoint = str(resolve_checkpoint_path(args.human_checkpoint))
 
     human_algorithm_config_updates = json.loads(args.human_algorithm_config_updates)
     variants = get_default_variants(
         clutter_density=args.clutter_density,
         clutter_bedrock_fraction=args.clutter_bedrock_fraction,
     )
-    human_checkpoint_name = Path(args.human_checkpoint).name
+    human_checkpoint_name = Path(human_checkpoint).name
 
     summary: Dict[str, Any] = {
-        "human_checkpoint": str(Path(args.human_checkpoint).resolve()),
+        "quick": args.quick,
+        "human_checkpoint": str(Path(human_checkpoint).resolve()),
         "human_run": args.human_run,
         "human_policy_id": args.human_policy_id,
         "assistant_num_simulations": args.assistant_num_simulations,
         "goal_subset": args.goal_subset,
         "seeds": args.seeds,
+        "train_config_updates": train_config_updates,
         "variants": [],
     }
 
@@ -338,38 +461,45 @@ def main() -> None:
 
             train_command = build_train_command(
                 python_executable=args.python_executable,
-                human_checkpoint=args.human_checkpoint,
+                human_checkpoint=human_checkpoint,
                 human_checkpoint_name=human_checkpoint_name,
                 experiment_dir=train_dir,
                 seed=seed,
                 variant=variant,
+                train_config_updates=train_config_updates,
             )
             _run_command(train_command, dry_run=args.dry_run)
 
             assistant_checkpoint = ""
             train_run_dir = None
+            eval_run_dir = None
             eval_command = None
             metrics_path = eval_dir / "metrics.json"
             comparable_metrics = None
             if not args.dry_run:
                 train_run_dir = _latest_numeric_run_dir(train_dir)
                 assistant_checkpoint = str(_find_final_checkpoint(train_run_dir))
-                eval_command = build_evaluate_command(
-                    python_executable=args.python_executable,
-                    human_run=args.human_run,
-                    human_checkpoint=args.human_checkpoint,
-                    human_policy_id=args.human_policy_id,
-                    human_algorithm_config_updates=human_algorithm_config_updates,
-                    assistant_checkpoint=assistant_checkpoint,
-                    out_dir=eval_dir,
-                    seed=seed,
-                    num_episodes=args.num_episodes,
-                    num_workers=args.num_workers,
-                    assistant_num_simulations=args.assistant_num_simulations,
-                    goal_subset=args.goal_subset,
-                    variant=variant,
-                )
-                _run_command(eval_command, dry_run=False)
+
+            eval_command = build_evaluate_command(
+                python_executable=args.python_executable,
+                human_run=args.human_run,
+                human_checkpoint=human_checkpoint,
+                human_policy_id=args.human_policy_id,
+                human_algorithm_config_updates=human_algorithm_config_updates,
+                assistant_checkpoint=assistant_checkpoint,
+                out_dir=eval_dir,
+                seed=seed,
+                num_episodes=args.num_episodes,
+                num_workers=args.num_workers,
+                assistant_num_simulations=args.assistant_num_simulations,
+                goal_subset=args.goal_subset,
+                variant=variant,
+                horizon=QUICK_EVAL_HORIZON if args.quick else 1500,
+            )
+            _run_command(eval_command, dry_run=args.dry_run)
+            if not args.dry_run:
+                eval_run_dir = _latest_numeric_run_dir(eval_dir)
+                metrics_path = eval_run_dir / "metrics.json"
                 comparable_metrics = extract_comparable_metrics(
                     _load_json(metrics_path)
                 )
@@ -381,6 +511,9 @@ def main() -> None:
                         None if train_run_dir is None else str(train_run_dir)
                     ),
                     "assistant_checkpoint": assistant_checkpoint,
+                    "evaluate_run_dir": (
+                        None if eval_run_dir is None else str(eval_run_dir)
+                    ),
                     "evaluate_command": eval_command,
                     "metrics_path": str(metrics_path),
                     "comparable_metrics": comparable_metrics,

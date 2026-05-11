@@ -1,6 +1,7 @@
 import logging
 import os
 import pickle
+import sys
 from datetime import datetime
 from subprocess import Popen
 from typing import Optional
@@ -18,6 +19,22 @@ from mbag.evaluation.evaluator import MbagEvaluator
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_quick_flag(argv: list[str]) -> list[str]:
+    normalized_argv = list(argv)
+    if "--quick" not in normalized_argv:
+        return normalized_argv
+
+    normalized_argv.remove("--quick")
+    if "with" in normalized_argv:
+        normalized_argv.insert(normalized_argv.index("with") + 1, "quick")
+    else:
+        normalized_argv.extend(["with", "quick"])
+    return normalized_argv
+
+
+sys.argv[:] = _normalize_quick_flag(sys.argv)
+
 ex = Experiment()
 
 
@@ -27,6 +44,7 @@ def make_human_action_config():
     data_path = "data/human_data"  # noqa: F841
 
     num_players = 2
+    horizon = 1_000_000_000
     world_size: WorldSize = (11, 10, 10)
     goal_generator = TransformedGoalGenerator
     house_id = None
@@ -78,7 +96,7 @@ def make_human_action_config():
     mbag_config: MbagConfigDict = {  # noqa: F841
         "world_size": world_size,
         "num_players": num_players,
-        "horizon": 1_000_000_000,
+        "horizon": horizon,
         "goal_generator": goal_generator,
         "goal_generator_config": goal_generator_config,
         "malmo": {
@@ -112,6 +130,15 @@ def make_human_action_config():
 
 @ex.named_config
 def tutorial():
+    world_size = (6, 6, 6)  # noqa: F841
+    goal_generator = TutorialGoalGenerator  # noqa: F841
+    goal_generator_config = {}  # noqa: F841
+    num_players = 1  # noqa: F841
+
+
+@ex.named_config
+def quick():
+    horizon = 64  # noqa: F841
     world_size = (6, 6, 6)  # noqa: F841
     goal_generator = TutorialGoalGenerator  # noqa: F841
     goal_generator_config = {}  # noqa: F841

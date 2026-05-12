@@ -26,7 +26,7 @@ from mbag.environment.types import (
     PLAYER_LOCATIONS,
 )
 from mbag.evaluation.episode import MbagEpisode
-from mbag.rllib.os_utils import available_cpu_count
+from mbag.rllib.os_utils import available_cpu_count, configure_ray_environment
 from mbag.rllib.torch_models import MbagTorchModel
 from mbag.rllib.training_utils import load_trainer
 
@@ -88,6 +88,7 @@ def main(  # noqa: C901
     observer: FileStorageObserver,
     _log: Logger,
 ):
+    configure_ray_environment()
     ray.init(
         num_cpus=available_cpu_count(),
         ignore_reinit_error=True,

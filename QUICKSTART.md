@@ -43,19 +43,6 @@ which python
 You should see Python 3.10.x, and `which python` should point to the
 repository-local `.venv`.
 
-In a fresh terminal later, reactivate the same environment from the repository
-root with:
-
-```bash
-cd /path/to/minecraft-building-assistance-game-empo
-source .venv/bin/activate
-python -V
-which python
-```
-
-If your shell does not already initialize `pyenv`, rerun the `PYENV_ROOT` /
-`PATH` / `pyenv init` lines from above before activating `.venv`.
-
 If your existing `.venv` shows import errors from `pip`, `packaging`, `black`, `ray`, or
 `sacred`, delete `.venv` and rerun the install block above from scratch.
 
@@ -212,17 +199,15 @@ python -m mbag.scripts.run_paper_experiment_suite \
   --human-checkpoint "$HUMAN_CHECKPOINT" \
   --human-run BC \
   --out-dir data/quickstart_suite_quick \
+  --local-cpu \
   --quick
 ```
 
-`--quick` still runs the full suite structure: it keeps the train and evaluate
-steps for all three variants, but shrinks the work aggressively by forcing one
-seed, zero assistant training iterations, no parallel evaluation workers,
-`assistant_num_simulations=1`, and `horizon=16`. It is intended to finish in
-well under a minute on a typical local machine.
-
-If you want a small but nonzero local training run instead of the zero-iteration
-smoke setting, omit `--quick` and use `--local-cpu` instead.
+`--quick` forces a lightweight run with one seed, one evaluation episode, no
+parallel evaluation workers, and `assistant_num_simulations=1`. `--local-cpu`
+adds one training iteration, no rollout workers, one environment, small batch
+sizes, a tiny replay buffer, a 1-simulation training MCTS budget, and zero GPU
+requests, while forcing RLlib's simple optimizer path.
 
 Useful options:
 
@@ -331,10 +316,6 @@ apptainer exec --nv mbag-hpc.sif python -m mbag.scripts.run_paper_experiment_sui
   --out-dir data/quickstart_suite_hpc_quick \
   --quick
 ```
-
-Here too, `--quick` keeps the full train-plus-evaluate workflow for all three
-variants, but forces one seed, zero assistant training iterations, one
-evaluation episode, `assistant_num_simulations=1`, and `horizon=16`.
 
 Useful options:
 

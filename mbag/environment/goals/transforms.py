@@ -32,6 +32,18 @@ class RandomlyPlaceTransform(GoalTransform):
 
         offset_x = random.randint(0, size[0] - structure.size[0])
         offset_z = random.randint(0, size[2] - structure.size[2])
+        logger.info(
+            "placing structure of size %s into ambient grid %s at offset (x=%d, y=%d, z=%d); occupied x=[%d,%d), z=[%d,%d)",
+            structure.size,
+            size,
+            offset_x,
+            0,
+            offset_z,
+            offset_x,
+            offset_x + structure.size[0],
+            offset_z,
+            offset_z + structure.size[2],
+        )
         structure_slice = (
             slice(offset_x, offset_x + structure.size[0]),
             slice(0, structure.size[1]),

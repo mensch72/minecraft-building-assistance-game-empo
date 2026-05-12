@@ -14,6 +14,8 @@ This section describes how to set up your environment for running MBAG.
 
 **Installing the Python package:** first, install Python 3.8, 3.9, or 3.10. Then, run one of the following commmands:
 
+Python 3.11 and 3.12 are not supported by the current dependency pins in this repository.
+
   * Install just the environment: `pip install -e .`
   * Also install the RLlib dependencies for training and running assistants: `pip install -e .[rllib]`
   * Also install the Malmo interface to run assistants in Minecraft: `pip install -e .[rllib,malmo]`
@@ -216,6 +218,11 @@ Example:
         --human-run BC \
         --out-dir path/to/output_dir \
         --seeds 0 1 2
+
+`--human-checkpoint` is the input human model path. Pass the final RLlib
+checkpoint directory itself, the Sacred run directory that contains it, or the
+experiment directory containing numbered Sacred runs. Use a different path for
+`--out-dir`.
 
 Inside a scheduled GPU job, the suite will use the GPUs that Apptainer exposes
 to the container. The training configs already request GPUs for the

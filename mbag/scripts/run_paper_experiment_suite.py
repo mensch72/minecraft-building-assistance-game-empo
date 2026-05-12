@@ -8,7 +8,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple, cast
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WORLD_SIZE = (11, 10, 10)
 DEFAULT_ASSISTANT_EVAL_NUM_SIMULATIONS = 20
 DEFAULT_GOAL_SUBSET = "test"
@@ -18,8 +17,6 @@ QUICK_SEEDS = [0]
 QUICK_NUM_EPISODES = 1
 QUICK_NUM_WORKERS = 0
 QUICK_ASSISTANT_NUM_SIMULATIONS = 1
-QUICK_EVAL_HORIZON = 16
-QUICK_TRUNCATE_ON_NO_PROGRESS_TIMESTEPS = 8
 LOCAL_CPU_TRAIN_UPDATES = {
     "num_training_iters": 1,
     "num_workers": 0,
@@ -32,10 +29,6 @@ LOCAL_CPU_TRAIN_UPDATES = {
     "simple_optimizer": True,
     "num_gpus": 0,
     "num_gpus_per_worker": 0,
-}
-QUICK_TRAIN_UPDATES = {
-    **LOCAL_CPU_TRAIN_UPDATES,
-    "num_training_iters": 0,
 }
 CHECKPOINT_DIR_PATTERN = re.compile(r"checkpoint_[0-9]+$")
 CHECKPOINT_STATE_FILES = ("algorithm_state.pkl", "algorithm_state.msgpck")
@@ -55,7 +48,7 @@ def _sacred_value(value: Any) -> str:
     if value is None:
         return "None"
     if isinstance(value, (dict, list, tuple)):
-        return repr(value)
+        return json.dumps(value, separators=(",", ":"))
     return str(value)
 
 
@@ -180,20 +173,15 @@ def build_evaluate_command(
     assistant_num_simulations: int,
     goal_subset: str,
     variant: ExperimentVariant,
-    horizon: int = 1500,
 ) -> List[str]:
     env_config_updates: Dict[str, Any] = {
-        "horizon": horizon,
+        "horizon": 1500,
         "random_start_locations": True,
         "randomize_first_episode_length": False,
         "terminate_on_goal_completion": True,
         "truncate_on_no_progress_timesteps": None,
         "goal_generator_config": {"goal_generator_config": {"subset": goal_subset}},
     }
-    if horizon <= QUICK_EVAL_HORIZON:
-        env_config_updates[
-            "truncate_on_no_progress_timesteps"
-        ] = QUICK_TRUNCATE_ON_NO_PROGRESS_TIMESTEPS
     env_config_updates.update(variant.eval_env_updates)
     algorithm_config_updates = [
         dict(human_algorithm_config_updates),
@@ -387,9 +375,8 @@ def _parse_args() -> argparse.Namespace:
         "--quick",
         action="store_true",
         help=(
-            "Run the full suite workflow with minimal settings: keep all train and "
-            "evaluate steps, but force seeds=0, zero training iterations, "
-            "num_workers=0, assistant_num_simulations=1, and horizon=16."
+            "Run a lightweight workflow test by forcing seeds=0, num_episodes=1, "
+            "num_workers=0, and assistant_num_simulations=1."
         ),
     )
     parser.add_argument(
@@ -406,8 +393,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _make_train_config_updates(args: argparse.Namespace) -> Dict[str, Any]:
-    if args.quick:
-        return dict(QUICK_TRAIN_UPDATES)
     if args.local_cpu:
         return dict(LOCAL_CPU_TRAIN_UPDATES)
     return {}
@@ -437,7 +422,6 @@ def main() -> None:
     human_checkpoint_name = Path(human_checkpoint).name
 
     summary: Dict[str, Any] = {
-        "quick": args.quick,
         "human_checkpoint": str(Path(human_checkpoint).resolve()),
         "human_run": args.human_run,
         "human_policy_id": args.human_policy_id,
@@ -472,34 +456,28 @@ def main() -> None:
 
             assistant_checkpoint = ""
             train_run_dir = None
-            eval_run_dir = None
             eval_command = None
             metrics_path = eval_dir / "metrics.json"
             comparable_metrics = None
             if not args.dry_run:
                 train_run_dir = _latest_numeric_run_dir(train_dir)
                 assistant_checkpoint = str(_find_final_checkpoint(train_run_dir))
-
-            eval_command = build_evaluate_command(
-                python_executable=args.python_executable,
-                human_run=args.human_run,
-                human_checkpoint=human_checkpoint,
-                human_policy_id=args.human_policy_id,
-                human_algorithm_config_updates=human_algorithm_config_updates,
-                assistant_checkpoint=assistant_checkpoint,
-                out_dir=eval_dir,
-                seed=seed,
-                num_episodes=args.num_episodes,
-                num_workers=args.num_workers,
-                assistant_num_simulations=args.assistant_num_simulations,
-                goal_subset=args.goal_subset,
-                variant=variant,
-                horizon=QUICK_EVAL_HORIZON if args.quick else 1500,
-            )
-            _run_command(eval_command, dry_run=args.dry_run)
-            if not args.dry_run:
-                eval_run_dir = _latest_numeric_run_dir(eval_dir)
-                metrics_path = eval_run_dir / "metrics.json"
+                eval_command = build_evaluate_command(
+                    python_executable=args.python_executable,
+                    human_run=args.human_run,
+                    human_checkpoint=human_checkpoint,
+                    human_policy_id=args.human_policy_id,
+                    human_algorithm_config_updates=human_algorithm_config_updates,
+                    assistant_checkpoint=assistant_checkpoint,
+                    out_dir=eval_dir,
+                    seed=seed,
+                    num_episodes=args.num_episodes,
+                    num_workers=args.num_workers,
+                    assistant_num_simulations=args.assistant_num_simulations,
+                    goal_subset=args.goal_subset,
+                    variant=variant,
+                )
+                _run_command(eval_command, dry_run=False)
                 comparable_metrics = extract_comparable_metrics(
                     _load_json(metrics_path)
                 )
@@ -511,9 +489,6 @@ def main() -> None:
                         None if train_run_dir is None else str(train_run_dir)
                     ),
                     "assistant_checkpoint": assistant_checkpoint,
-                    "evaluate_run_dir": (
-                        None if eval_run_dir is None else str(eval_run_dir)
-                    ),
                     "evaluate_command": eval_command,
                     "metrics_path": str(metrics_path),
                     "comparable_metrics": comparable_metrics,

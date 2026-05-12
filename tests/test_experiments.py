@@ -68,12 +68,30 @@ def assert_config_matches(
         del config["num_gpus"]
         del config["num_gpus_per_worker"]
 
+        # Ignore newly added env/model defaults that older reference configs omit.
+        config["env_config"].pop("num_clutter_blocks", None)
+        config["env_config"].pop("clutter_bedrock_fraction", None)
+        if config.get("use_goal_predictor") is False:
+            config.pop("goal_loss_coeff", None)
+
         for key in ignore_keys:
             if key in config:
                 del config[key]
 
         # Weird inconsistent JSON serialization.
         for policy_id, policy_spec in config["policies"].items():
+            custom_model_config = (
+                policy_spec["config"].get("model", {}).get("custom_model_config", {})
+            )
+            if config.get("use_goal_predictor") is False:
+                policy_spec["config"].pop("goal_loss_coeff", None)
+            if custom_model_config.get("goal_agnostic") is False:
+                del custom_model_config["goal_agnostic"]
+            custom_model_env_config = custom_model_config.get("env_config")
+            if custom_model_env_config is not None:
+                custom_model_env_config.pop("num_clutter_blocks", None)
+                custom_model_env_config.pop("clutter_bedrock_fraction", None)
+
             if "spaces" in policy_spec["observation_space"]:
                 timestep_space = policy_spec["observation_space"]["spaces"]["py/tuple"][
                     2

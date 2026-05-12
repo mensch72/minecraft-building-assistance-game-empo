@@ -9,6 +9,7 @@ from ray.rllib.algorithms import Algorithm, AlgorithmConfig
 from ray.rllib.evaluation.worker_set import WorkerSet
 from ray.rllib.models.preprocessors import Preprocessor, get_preprocessor
 from ray.rllib.policy.policy import Policy, PolicySpec
+from ray.rllib.utils.tf_utils import get_tf_eager_cls_if_necessary
 from ray.rllib.utils.checkpoints import get_checkpoint_info
 from ray.rllib.utils.serialization import space_to_dict
 from ray.rllib.utils.typing import PolicyID
@@ -17,6 +18,7 @@ from ray.tune.registry import get_trainable_cls
 
 from mbag.compatibility_utils import convert_old_config_to_new
 from mbag.environment.mbag_env import MbagEnv
+from mbag.rllib.os_utils import configure_ray_environment
 
 
 def build_logger_creator(experiment_dir: str):
@@ -75,6 +77,7 @@ def load_trainer(
     state["worker"]["is_policy_to_train"] = lambda *args, **kwargs: False
 
     # Create the Trainer from config and state.
+    configure_ray_environment()
     if isinstance(run, str):
         cls = cast(Type[Algorithm], get_trainable_cls(run))
     else:
@@ -115,7 +118,51 @@ def load_policy(
         policy_state["policy_spec"]["observation_space"] = space_to_dict(
             preprocessor.observation_space
         )
-    return Policy.from_state(policy_state)
+    return _restore_policy_from_state(policy_state)
+
+
+def _restore_policy_from_state(policy_state: Dict[str, Any]) -> Policy:
+    serialized_pol_spec = policy_state.get("policy_spec")
+    if serialized_pol_spec is None:
+        raise ValueError(
+            "No `policy_spec` key was found in given `state`! Cannot create new Policy."
+        )
+
+    pol_spec = PolicySpec.deserialize(serialized_pol_spec)
+    if pol_spec.config["framework"] == "tf":
+        return Policy.from_state(policy_state)
+
+    actual_class = get_tf_eager_cls_if_necessary(
+        pol_spec.policy_class,
+        pol_spec.config,
+    )
+    policy = actual_class(
+        pol_spec.observation_space,
+        pol_spec.action_space,
+        pol_spec.config,
+    )
+
+    current_weights = policy.get_weights()
+    policy_state["weights"] = _merge_compatible_policy_weights(
+        loaded_weights=policy_state["weights"],
+        current_weights=current_weights,
+    )
+    policy.set_state(policy_state)
+    return policy
+
+
+def _merge_compatible_policy_weights(
+    *,
+    loaded_weights: Dict[str, Any],
+    current_weights: Dict[str, Any],
+) -> Dict[str, Any]:
+    merged_weights = dict(current_weights)
+    for weight_name, loaded_weight in loaded_weights.items():
+        if weight_name not in current_weights:
+            continue
+        if _weights_are_compatible(loaded_weight, current_weights[weight_name]):
+            merged_weights[weight_name] = loaded_weight
+    return merged_weights
 
 
 def load_policies_from_checkpoint(
@@ -158,6 +205,8 @@ def load_policies_from_checkpoint(
             weight_name: (
                 weight
                 if should_load_param(weight_name)
+                and weight_name in current_weights
+                and _weights_are_compatible(weight, current_weights[weight_name])
                 else current_weights[weight_name]
             )
             for weight_name, weight in policy_states[loaded_policy_id][
@@ -171,3 +220,11 @@ def load_policies_from_checkpoint(
 
     workers: WorkerSet = cast(Any, trainer).workers
     workers.foreach_policy(copy_policy_weights)
+
+
+def _weights_are_compatible(loaded_weight: Any, current_weight: Any) -> bool:
+    loaded_shape = getattr(loaded_weight, "shape", None)
+    current_shape = getattr(current_weight, "shape", None)
+    if loaded_shape is None or current_shape is None:
+        return True
+    return tuple(loaded_shape) == tuple(current_shape)

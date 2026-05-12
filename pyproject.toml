@@ -1,5 +1,9 @@
 [build-system]
-requires = ["setuptools", "numpy>=1.21,<1.22"]
+requires = [
+    "setuptools>=64",
+    "numpy>=1.21,<1.22; python_version < '3.11'",
+    "numpy>=1.26; python_version >= '3.11'",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,7 +22,7 @@ dependencies = [
     "scikit-image>=0.21",
     "tqdm",
 ]
-requires-python = ">= 3.8"
+requires-python = ">= 3.8, < 3.11"
 classifiers=[
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -53,17 +57,19 @@ packages = [
 [project.optional-dependencies]
 dev = [
     "flake8",
-    "black",
-    "mypy",
-    "pytest",
+    "black<25",
+    "mypy<2",
+    "packaging>=24,<25",
+    "pytest<9",
     "pytest-timeout",
     "memray<1.12",
     "pytest-memray",
     "pep8-naming",
-    "isort",
+    "isort<6",
     "types-psutil",
 ]
 rllib = [
+    "packaging>=24,<25",
     "ray[rllib]==2.7.1",
     "torch>=1.8",
     "sacred==0.8.4",

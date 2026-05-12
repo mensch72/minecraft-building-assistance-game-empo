@@ -256,7 +256,7 @@ PyObject* _mbag_get_action_distribution_mask(PyObject *self, PyObject *args, PyO
         for (y = min_place_y; y <= max_place_y; y++) {
             for (z = min_place_z; z <= max_place_z; z++) {
                 npy_uint8 block = *(npy_uint8*)PyArray_GETPTR4(world_obs_array, CURRENT_BLOCKS, x, y, z);
-                if (block == AIR || block == BEDROCK) {
+                if (block == AIR) {
                     *(npy_bool*)PyArray_GETPTR4(valid_array, BREAK_BLOCK_CHANNEL, x, y, z) = false;
                 } else {
                     in_reach = teleportation || (

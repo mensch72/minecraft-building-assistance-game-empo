@@ -730,6 +730,7 @@ def test_goal_agnostic_alpha_zero(default_config, default_alpha_zero_config):
         assert trainer.config["goal_loss_coeff"] == 0
         policy = cast(TorchPolicyV2, trainer.get_policy("human"))
         model = cast(Any, policy.model)
+        assert trainer.workers is not None
         obs = trainer.workers.local_worker().foreach_env(lambda env: env.reset()[0])[0]
         empty_state_in: List[Any] = []
         model.compute_priors_and_value([obs], empty_state_in)
@@ -768,6 +769,7 @@ def test_goal_agnostic_reapplied_after_checkpoint_load(
         assert agnostic_trainer.config["goal_loss_coeff"] == TEST_GOAL_LOSS_COEFF
         policy = cast(TorchPolicyV2, agnostic_trainer.get_policy("human"))
         model = cast(Any, policy.model)
+        assert agnostic_trainer.workers is not None
         obs = agnostic_trainer.workers.local_worker().foreach_env(
             lambda env: env.reset()[0]
         )[0]

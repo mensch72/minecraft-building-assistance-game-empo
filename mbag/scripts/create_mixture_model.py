@@ -19,7 +19,7 @@ from sacred import SETTINGS, Experiment
 from sacred.observers import FileStorageObserver
 
 import mbag
-from mbag.rllib.os_utils import available_cpu_count
+from mbag.rllib.os_utils import available_cpu_count, configure_ray_environment
 from mbag.rllib.training_utils import build_logger_creator, load_trainer_config
 
 SETTINGS.CONFIG.READ_ONLY_CONFIG = False
@@ -74,7 +74,7 @@ def main(
     observer,
     _log: Logger,
 ):
-    os.environ["RAY_AIR_NEW_PERSISTENCE_MODE"] = "0"
+    configure_ray_environment()
     ray.init(
         num_cpus=available_cpu_count(),
         ignore_reinit_error=True,

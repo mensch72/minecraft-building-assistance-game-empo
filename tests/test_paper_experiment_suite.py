@@ -1,7 +1,5 @@
 from mbag.scripts.run_paper_experiment_suite import (
     LOCAL_CPU_TRAIN_UPDATES,
-    QUICK_EVAL_HORIZON,
-    QUICK_TRUNCATE_ON_NO_PROGRESS_TIMESTEPS,
     ExperimentVariant,
     build_evaluate_command,
     build_train_command,
@@ -112,51 +110,14 @@ def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):
                 "clutter_bedrock_fraction": 0.5,
             },
         ),
-        horizon=64,
     )
 
     assert command[:4] == ["python", "-m", "mbag.scripts.evaluate", "with"]
-    assert "runs=['BC', 'MbagAlphaZero']" in command
-    assert "policy_ids=['human', 'assistant']" in command
+    assert 'runs=["BC","MbagAlphaZero"]' in command
+    assert 'policy_ids=["human","assistant"]' in command
     assert "explore=False" in command
     assert "seed=3" in command
-    assert "'horizon': 64" in next(
-        arg for arg in command if arg.startswith("env_config_updates=")
-    )
-    assert any("'num_simulations': 20" in arg for arg in command)
-
-
-def test_build_evaluate_command_enables_early_truncation_for_quick_horizon(tmp_path):
-    command = build_evaluate_command(
-        python_executable="python",
-        human_run="BC",
-        human_checkpoint="/tmp/human/checkpoint",
-        human_policy_id="human",
-        human_algorithm_config_updates={},
-        assistant_checkpoint="/tmp/assistant/checkpoint",
-        out_dir=tmp_path,
-        seed=0,
-        num_episodes=1,
-        num_workers=0,
-        assistant_num_simulations=1,
-        goal_subset="test",
-        variant=ExperimentVariant(
-            name="standard_paper",
-            description="",
-            train_updates={},
-            eval_env_updates={},
-        ),
-        horizon=QUICK_EVAL_HORIZON,
-    )
-
-    env_config_updates_arg = next(
-        arg for arg in command if arg.startswith("env_config_updates=")
-    )
-    assert f"'horizon': {QUICK_EVAL_HORIZON}" in env_config_updates_arg
-    assert (
-        f"'truncate_on_no_progress_timesteps': "
-        f"{QUICK_TRUNCATE_ON_NO_PROGRESS_TIMESTEPS}"
-    ) in env_config_updates_arg
+    assert any('"num_simulations":20' in arg for arg in command)
 
 
 def test_extract_comparable_metrics_prefers_normalized_outputs():

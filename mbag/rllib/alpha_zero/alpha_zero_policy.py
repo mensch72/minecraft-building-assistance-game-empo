@@ -13,6 +13,7 @@ from ray.rllib.evaluation.postprocessing import Postprocessing, discount_cumsum
 from ray.rllib.models import ActionDistribution, ModelV2
 from ray.rllib.models.modelv2 import restore_original_dimensions
 from ray.rllib.models.torch.torch_action_dist import TorchCategorical
+from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.policy.torch_mixins import EntropyCoeffSchedule, LearningRateSchedule
 from ray.rllib.policy.torch_policy import TorchPolicy
 from ray.rllib.policy.view_requirement import ViewRequirement
@@ -588,7 +589,7 @@ class MbagAlphaZeroPolicy(
             **self.extra_action_out(
                 input_dict,
                 kwargs.get("state_batches", []),
-                self.model,
+                cast(TorchModelV2, self.model),
                 cast(Any, None),
             ),
             ACTION_MASK: action_mask,

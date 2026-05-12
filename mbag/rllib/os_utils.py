@@ -3,6 +3,11 @@ import re
 import subprocess
 
 
+def configure_ray_environment() -> None:
+    os.environ["RAY_AIR_NEW_PERSISTENCE_MODE"] = "0"
+    os.environ.setdefault("TPU_ACCELERATOR_TYPE", "")
+
+
 def available_cpu_count() -> int:  # noqa: C901
     """
     Number of available virtual or physical CPUs on this system, i.e.

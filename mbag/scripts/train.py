@@ -49,7 +49,7 @@ from mbag.rllib.bc import BCConfig, BCTorchPolicy
 from mbag.rllib.callbacks import MbagCallbacks
 from mbag.rllib.data_augmentation import randomly_permute_block_types
 from mbag.rllib.gail import MbagGAILConfig, MbagGAILTorchPolicy
-from mbag.rllib.os_utils import available_cpu_count
+from mbag.rllib.os_utils import available_cpu_count, configure_ray_environment
 from mbag.rllib.policies import MbagAgentPolicy
 from mbag.rllib.ppo import MbagPPOConfig, MbagPPOTorchPolicy
 from mbag.rllib.sacred_utils import convert_dogmatics_to_standard
@@ -963,7 +963,7 @@ def main(
     _log: Logger,
 ):
     temp_dir = tempfile.mkdtemp()
-    os.environ["RAY_AIR_NEW_PERSISTENCE_MODE"] = "0"
+    configure_ray_environment()
     ray.init(
         num_cpus=available_cpu_count(),
         ignore_reinit_error=True,

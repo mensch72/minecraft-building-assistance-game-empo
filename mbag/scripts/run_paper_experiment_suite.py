@@ -257,6 +257,13 @@ def _find_final_checkpoint(run_dir: Path) -> Path:
     return checkpoints[-1]
 
 
+def _find_metrics_path(experiment_dir: Path) -> Path:
+    metrics_path = _latest_numeric_run_dir(experiment_dir) / "metrics.json"
+    if not metrics_path.exists():
+        raise FileNotFoundError(f"No metrics.json found under {experiment_dir}")
+    return metrics_path
+
+
 def _is_rllib_checkpoint_dir(path: Path) -> bool:
     return path.is_dir() and (
         CHECKPOINT_DIR_PATTERN.fullmatch(path.name) is not None
@@ -494,6 +501,7 @@ def main() -> None:
 
             assistant_checkpoint = ""
             train_run_dir = None
+            eval_run_dir = None
             eval_command = None
             metrics_path = eval_dir / "metrics.json"
             comparable_metrics = None
@@ -516,6 +524,8 @@ def main() -> None:
                     variant=variant,
                 )
                 _run_command(eval_command, dry_run=False)
+                eval_run_dir = _latest_numeric_run_dir(eval_dir)
+                metrics_path = _find_metrics_path(eval_dir)
                 comparable_metrics = extract_comparable_metrics(
                     _load_json(metrics_path)
                 )
@@ -525,6 +535,9 @@ def main() -> None:
                     "train_command": train_command,
                     "train_run_dir": (
                         None if train_run_dir is None else str(train_run_dir)
+                    ),
+                    "evaluate_run_dir": (
+                        None if eval_run_dir is None else str(eval_run_dir)
                     ),
                     "assistant_checkpoint": assistant_checkpoint,
                     "evaluate_command": eval_command,

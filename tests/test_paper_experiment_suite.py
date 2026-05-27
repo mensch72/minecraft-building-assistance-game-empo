@@ -1,6 +1,7 @@
 from mbag.scripts.run_paper_experiment_suite import (
     LOCAL_CPU_TRAIN_UPDATES,
     ExperimentVariant,
+    _find_metrics_path,
     _sacred_value,
     _select_variants,
     _make_train_config_updates,
@@ -117,6 +118,18 @@ def test_select_variants_filters_requested_subset():
     selected_variants = _select_variants(variants, ["standard_paper"])
 
     assert [variant.name for variant in selected_variants] == ["standard_paper"]
+
+
+def test_find_metrics_path_uses_latest_numeric_run_dir(tmp_path):
+    older_run_dir = tmp_path / "2"
+    older_run_dir.mkdir()
+    (older_run_dir / "metrics.json").write_text("{}")
+    newer_run_dir = tmp_path / "5"
+    newer_run_dir.mkdir()
+    newer_metrics_path = newer_run_dir / "metrics.json"
+    newer_metrics_path.write_text("{}")
+
+    assert _find_metrics_path(tmp_path) == newer_metrics_path
 
 
 def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):

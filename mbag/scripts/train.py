@@ -93,6 +93,29 @@ class NoTypeAnnotationsFileStorageObserver(FileStorageObserver):
         return super().save_json(obj, filename)
 
 
+def _limit_cuda_memory_usage(config: AlgorithmConfig, trainer: Algorithm) -> None:
+    if not torch.cuda.is_available():
+        return
+
+    num_gpus_per_worker = float(config["num_gpus_per_worker"])
+    if trainer.workers is not None and num_gpus_per_worker > 0:
+        trainer.workers.foreach_worker(
+            lambda worker: torch.cuda.set_per_process_memory_fraction(
+                num_gpus_per_worker
+            )
+        )
+    if trainer.evaluation_workers is not None and num_gpus_per_worker > 0:
+        trainer.evaluation_workers.foreach_worker(
+            lambda worker: torch.cuda.set_per_process_memory_fraction(
+                num_gpus_per_worker
+            )
+        )
+
+    num_gpus = float(config["num_gpus"])
+    if num_gpus > 0:
+        torch.cuda.set_per_process_memory_fraction(num_gpus)
+
+
 @ex.config
 def sacred_config(_log):  # noqa
     run = "MbagPPO"
@@ -980,22 +1003,8 @@ def main(
         logger_creator=build_logger_creator(observer.dir),
     )
 
-    # Limit CUDA memory usage based on num_gpus and num_gpus_per_worker.
-    if torch.cuda.is_available():
-        num_gpus_per_worker: float = config["num_gpus_per_worker"]
-        if trainer.workers is not None and num_gpus_per_worker > 0:
-            trainer.workers.foreach_worker(
-                lambda worker: torch.cuda.set_per_process_memory_fraction(
-                    float(num_gpus_per_worker)
-                )
-            )
-        if trainer.evaluation_workers is not None and num_gpus_per_worker > 0:
-            trainer.evaluation_workers.foreach_worker(
-                lambda worker: torch.cuda.set_per_process_memory_fraction(
-                    float(num_gpus_per_worker)
-                )
-            )
-        torch.cuda.set_per_process_memory_fraction(float(config["num_gpus"]))
+    # Limit CUDA memory usage only when this run has a positive GPU budget.
+    _limit_cuda_memory_usage(config, trainer)
 
     if checkpoint_to_load_policies is not None:
         _log.info(f"Initializing policies from {checkpoint_to_load_policies}")

@@ -24,11 +24,34 @@ try:
     from mbag.scripts.create_mixture_model import ex as create_mixture_model_ex
     from mbag.scripts.evaluate import ex as evaluate_ex
     from mbag.scripts.rollout import ex as rollout_ex
+    from mbag.scripts.train import _limit_cuda_memory_usage
     from mbag.scripts.train import ex
 except ImportError:
     MbagTransformerModel = object  # type: ignore
 
 TEST_GOAL_LOSS_COEFF = 123
+
+
+def test_limit_cuda_memory_usage_skips_zero_gpu_budget(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        torch.cuda,
+        "set_per_process_memory_fraction",
+        lambda fraction: calls.append(fraction),
+    )
+
+    class DummyTrainer:
+        workers = None
+        evaluation_workers = None
+
+    _limit_cuda_memory_usage(
+        cast(Any, {"num_gpus": 0, "num_gpus_per_worker": 0}),
+        cast(Any, DummyTrainer()),
+    )
+
+    assert calls == []
 
 
 @pytest.fixture(scope="session")

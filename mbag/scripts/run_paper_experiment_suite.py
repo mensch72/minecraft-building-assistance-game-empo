@@ -43,13 +43,30 @@ class ExperimentVariant:
 
 
 def _sacred_value(value: Any) -> str:
-    if isinstance(value, bool):
-        return "True" if value else "False"
-    if value is None:
-        return "None"
-    if isinstance(value, (dict, list, tuple)):
-        return json.dumps(value, separators=(",", ":"))
+    if isinstance(value, (str, dict, list, tuple, bool)) or value is None:
+        return repr(value)
     return str(value)
+
+
+def _select_variants(
+    variants: Sequence[ExperimentVariant],
+    selected_variant_names: Sequence[str] | None,
+) -> List[ExperimentVariant]:
+    if not selected_variant_names:
+        return list(variants)
+
+    selected_variant_name_set = set(selected_variant_names)
+    selected_variants = [
+        variant for variant in variants if variant.name in selected_variant_name_set
+    ]
+    unknown_variants = selected_variant_name_set.difference(
+        variant.name for variant in variants
+    )
+    if unknown_variants:
+        raise ValueError(
+            "Unknown variant name(s): " + ", ".join(sorted(unknown_variants))
+        )
+    return selected_variants
 
 
 def _make_override_args(overrides: Mapping[str, Any]) -> List[str]:
@@ -372,6 +389,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-episodes", type=int, default=100)
     parser.add_argument("--num-workers", type=int, default=10)
     parser.add_argument(
+        "--variant-names",
+        nargs="+",
+        default=None,
+        help=(
+            "Optional subset of suite variants to run, for example "
+            "standard_paper cluttered_large_grid."
+        ),
+    )
+    parser.add_argument(
         "--assistant-num-simulations",
         type=int,
         default=DEFAULT_ASSISTANT_EVAL_NUM_SIMULATIONS,
@@ -430,6 +456,7 @@ def main() -> None:
         clutter_density=args.clutter_density,
         clutter_bedrock_fraction=args.clutter_bedrock_fraction,
     )
+    variants = _select_variants(variants, args.variant_names)
     human_checkpoint_name = Path(human_checkpoint).name
 
     summary: Dict[str, Any] = {

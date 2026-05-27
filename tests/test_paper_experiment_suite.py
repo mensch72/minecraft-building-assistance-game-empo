@@ -1,6 +1,8 @@
 from mbag.scripts.run_paper_experiment_suite import (
     LOCAL_CPU_TRAIN_UPDATES,
     ExperimentVariant,
+    _sacred_value,
+    _select_variants,
     _make_train_config_updates,
     build_evaluate_command,
     build_train_command,
@@ -100,6 +102,23 @@ def test_make_train_config_updates_merges_json_overrides_with_local_cpu_defaults
     assert train_config_updates["num_gpus"] == 0
 
 
+def test_sacred_value_formats_nested_collections_as_python_literals():
+    assert _sacred_value({"flag": True, "missing": None, "items": [1, "x"]}) == (
+        "{'flag': True, 'missing': None, 'items': [1, 'x']}"
+    )
+
+
+def test_select_variants_filters_requested_subset():
+    variants = get_default_variants(
+        clutter_density=0.05,
+        clutter_bedrock_fraction=0.5,
+    )
+
+    selected_variants = _select_variants(variants, ["standard_paper"])
+
+    assert [variant.name for variant in selected_variants] == ["standard_paper"]
+
+
 def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):
     command = build_evaluate_command(
         python_executable="python",
@@ -127,11 +146,12 @@ def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):
     )
 
     assert command[:4] == ["python", "-m", "mbag.scripts.evaluate", "with"]
-    assert 'runs=["BC","MbagAlphaZero"]' in command
-    assert 'policy_ids=["human","assistant"]' in command
+    assert "runs=['BC', 'MbagAlphaZero']" in command
+    assert "policy_ids=['human', 'assistant']" in command
     assert "explore=False" in command
     assert "seed=3" in command
-    assert any('"num_simulations":20' in arg for arg in command)
+    assert any("'num_simulations': 20" in arg for arg in command)
+    assert any("'randomize_first_episode_length': False" in arg for arg in command)
 
 
 def test_extract_comparable_metrics_prefers_normalized_outputs():

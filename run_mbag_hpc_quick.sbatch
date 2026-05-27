@@ -80,5 +80,7 @@ apptainer exec --nv "$IMAGE_PATH" python -m mbag.scripts.run_paper_experiment_su
   --human-checkpoint "$HUMAN_CHECKPOINT" \
   --human-run BC \
   --out-dir "$OUT_DIR" \
+    --variant-names standard_paper \
+    --train-config-updates-json '{"sample_batch_size":64,"train_batch_size":32,"replay_buffer_size":64}' \
   --local-cpu \
   --quick

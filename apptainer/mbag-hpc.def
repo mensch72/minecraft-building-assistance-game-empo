@@ -17,7 +17,11 @@ From: python:3.10-slim
         git \
     && rm -rf /var/lib/apt/lists/*
 
-    python -m pip install --upgrade pip setuptools wheel
+    python -m pip install --upgrade \
+        'pip<25' \
+        'setuptools<82' \
+        'wheel<0.46' \
+        'packaging<25'
     cd /opt/mbag-src
     python -m pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cu121 \

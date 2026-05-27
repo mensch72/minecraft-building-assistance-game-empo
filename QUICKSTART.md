@@ -231,6 +231,12 @@ Build the container once:
 apptainer build mbag-hpc.sif apptainer/mbag-hpc.def
 ```
 
+If you pull changes that touch `apptainer/mbag-hpc.def`, rebuild the image before
+resubmitting jobs. In particular, the current image definition pins
+`pip`, `setuptools`, `wheel`, and `packaging` to a Ray-compatible range; if you
+reuse an older image, you may hit `ModuleNotFoundError: No module named
+'pkg_resources'` during Ray startup.
+
 Create `run_mbag_quickstart.sbatch`:
 
 ```bash

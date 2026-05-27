@@ -72,8 +72,8 @@ if [[ -e "$OUT_DIR" ]]; then
     exit 1
 fi
 
-# Quick sanity check that the GPU made it into the container before starting the suite.
-apptainer exec --nv "$IMAGE_PATH" python -c "import torch; print('cuda', torch.cuda.is_available(), 'count', torch.cuda.device_count())"
+# Quick sanity check that the Python stack needed by Ray is present before starting the suite.
+apptainer exec --nv "$IMAGE_PATH" python -c "import pkg_resources, ray, torch; print('cuda', torch.cuda.is_available(), 'count', torch.cuda.device_count(), 'ray', ray.__version__)"
 
 # Run the paper-style suite in its smallest end-to-end configuration.
 apptainer exec --nv "$IMAGE_PATH" python -m mbag.scripts.run_paper_experiment_suite \

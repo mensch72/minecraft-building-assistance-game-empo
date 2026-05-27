@@ -26,7 +26,7 @@ From: python:3.10-slim
     python -m pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cu121 \
         'torch==2.1.2'
-    python -m pip install --no-cache-dir -e .[rllib]
+    python -m pip install --no-cache-dir -e .[rllib,malmo]
 
 %runscript
     exec python "$@"

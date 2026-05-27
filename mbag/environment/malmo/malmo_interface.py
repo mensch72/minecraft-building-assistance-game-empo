@@ -421,19 +421,22 @@ class MalmoInterface:
 
         self._ai_action_queue.clear()
         self._ai_actions_thread = threading.Thread(
-            target=wrap_thread_to_handle_exceptions(self._run_ai_actions)
+            target=wrap_thread_to_handle_exceptions(self._run_ai_actions),
+            daemon=True,
         )
         self._ai_actions_thread.start()
 
         self._human_action_queue.clear()
         self._human_action_detection_thread = threading.Thread(
-            target=wrap_thread_to_handle_exceptions(self._run_human_action_detection)
+            target=wrap_thread_to_handle_exceptions(self._run_human_action_detection),
+            daemon=True,
         )
         self._human_action_detection_thread.start()
 
         if self._env_config["malmo"]["use_spectator"]:
             self._spectator_thread: Optional[threading.Thread] = threading.Thread(
-                target=wrap_thread_to_handle_exceptions(self._run_spectator)
+                target=wrap_thread_to_handle_exceptions(self._run_spectator),
+                daemon=True,
             )
             self._spectator_thread.start()
         else:
@@ -458,10 +461,22 @@ class MalmoInterface:
         with self._ai_action_lock:
             self._ai_action_lock.notify()
 
-        self._ai_actions_thread.join()
-        self._human_action_detection_thread.join()
+        join_timeout = max(5.0, self._env_config["malmo"]["action_delay"] * 4)
+
+        self._ai_actions_thread.join(timeout=join_timeout)
+        if self._ai_actions_thread.is_alive():
+            logger.warning("timed out while waiting for AI actions thread to end")
+
+        self._human_action_detection_thread.join(timeout=join_timeout)
+        if self._human_action_detection_thread.is_alive():
+            logger.warning(
+                "timed out while waiting for human action detection thread to end"
+            )
+
         if self._spectator_thread is not None:
-            self._spectator_thread.join()
+            self._spectator_thread.join(timeout=join_timeout)
+            if self._spectator_thread.is_alive():
+                logger.warning("timed out while waiting for spectator thread to end")
 
         with self._malmo_lock:
             time.sleep(1)

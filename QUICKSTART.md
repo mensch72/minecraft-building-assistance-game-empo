@@ -33,6 +33,13 @@ python -m pip install --upgrade "pip<25" "setuptools<82" "wheel<0.46" "packaging
 pip install -e .[rllib,dev]
 ```
 
+If you want rendered Malmo videos from `mbag.scripts.evaluate` with
+`record_video=True`, install the optional Malmo dependency too:
+
+```bash
+pip install -e .[malmo]
+```
+
 Sanity checks:
 
 ```bash
@@ -209,6 +216,38 @@ adds one training iteration, no rollout workers, one environment, small batch
 sizes, a tiny replay buffer, a 1-simulation training MCTS budget, and zero GPU
 requests, while forcing RLlib's simple optimizer path.
 
+To render a local Minecraft video with `record_video=True`, first make sure the
+optional Malmo dependency is installed, then start the three Minecraft clients
+needed for a two-player mission plus spectator:
+
+```bash
+./start_minecraft.sh
+ss -ltn | grep -E ':1000[0-2]\b'
+```
+
+Once ports `10000`, `10001`, and `10002` are listening, run the evaluation.
+For example, with a BC human checkpoint and any assistant checkpoint directory:
+
+```bash
+ASSISTANT_CHECKPOINT=/path/to/assistant/checkpoint
+
+python -m mbag.scripts.evaluate with \
+  runs='["BC","MbagAlphaZero"]' \
+  checkpoints="[\"$HUMAN_CHECKPOINT\",\"$ASSISTANT_CHECKPOINT\"]" \
+  policy_ids='["human","assistant"]' \
+  temperatures='[1.0,1.0]' \
+  num_episodes=1 \
+  num_workers=0 \
+  record_video=True \
+  algorithm_config_updates='[{}, {"mcts_config": {"argmax_tree_policy": True, "add_dirichlet_noise": False, "num_simulations": 1}}]' \
+  env_config_updates='{"horizon":500,"random_start_locations":True,"randomize_first_episode_length":False,"terminate_on_goal_completion":True,"truncate_on_no_progress_timesteps":100,"goal_generator_config":{"goal_generator_config":{"subset":"test"}}}' \
+  out_dir=data/table3_like_bc_eval_video
+```
+
+Sacred writes each run into a numbered subdirectory under `out_dir`. The
+rendered video for the command above will be saved as
+`data/table3_like_bc_eval_video/<run_id>/000000.mp4`.
+
 Useful options:
 
 - `--dry-run` prints the exact train/evaluate commands without executing them.
@@ -236,6 +275,10 @@ resubmitting jobs. In particular, the current image definition pins
 `pip`, `setuptools`, `wheel`, and `packaging` to a Ray-compatible range; if you
 reuse an older image, you may hit `ModuleNotFoundError: No module named
 'pkg_resources'` during Ray startup.
+
+The container now also installs the optional `malmo` extra, so it can run
+`mbag.scripts.evaluate` with `record_video=True`. Rebuild the image before
+expecting rendered rollout videos inside Apptainer.
 
 Create `run_mbag_quickstart.sbatch`:
 

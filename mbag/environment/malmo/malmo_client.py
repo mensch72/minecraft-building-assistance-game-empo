@@ -598,10 +598,19 @@ class MalmoClient(object):
                 while minecraft_server_port is None:
                     time.sleep(2)
                     timeout_seconds_left -= 2
-                    minecraft_server_port = self._try_get_minecraft_server_port(
-                        "localhost",
-                        start_port,
-                    )
+                    for client_port in range(
+                        start_port, start_port + self._get_num_agents(env_config)
+                    ):
+                        minecraft_server_port = self._try_get_minecraft_server_port(
+                            "localhost",
+                            client_port,
+                        )
+                        if minecraft_server_port is not None:
+                            logger.info(
+                                "found Minecraft server via Malmo client on port "
+                                f"{client_port}"
+                            )
+                            break
                     if timeout_seconds_left <= 0:
                         break
 

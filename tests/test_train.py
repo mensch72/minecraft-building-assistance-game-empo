@@ -18,6 +18,7 @@ try:
     from torch import nn
 
     from mbag.rllib.alpha_zero.alpha_zero_policy import C_PUCT
+    from mbag.rllib.alpha_zero.alpha_zero import _mean_or_zero
     from mbag.rllib.mixture_model import MixtureModel
     from mbag.rllib.torch_models import MbagTransformerModel
     from mbag.rllib.training_utils import load_trainer
@@ -52,6 +53,12 @@ def test_limit_cuda_memory_usage_skips_zero_gpu_budget(monkeypatch):
     )
 
     assert calls == []
+
+
+def test_mean_or_zero_returns_zero_for_empty_denominator():
+    assert _mean_or_zero(5.0, 0) == 0.0
+    assert _mean_or_zero(5.0, -1) == 0.0
+    assert _mean_or_zero(6.0, 3) == 2.0
 
 
 @pytest.fixture(scope="session")

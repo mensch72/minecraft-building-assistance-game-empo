@@ -41,6 +41,12 @@ from .replay_buffer import PartialReplayBuffer
 logger = logging.getLogger(__name__)
 
 
+def _mean_or_zero(total: float, count: int) -> float:
+    if count <= 0:
+        return 0.0
+    return total / count
+
+
 class MbagAlphaZeroConfig(AlphaZeroConfig):
     def __init__(self, algo_class=None):
         super().__init__(algo_class)
@@ -397,9 +403,12 @@ class MbagAlphaZero(AlphaZero, KLRegularizationMixin):
                 )
 
             metrics_by_policy[policy_id] = {
-                "goal_cross_entropy": total_cross_entropy / total_blocks,
-                "unplaced_blocks_goal_cross_entropy": total_unplaced_blocks_cross_entropy
-                / total_unplaced_blocks,
+                "goal_cross_entropy": _mean_or_zero(
+                    total_cross_entropy, total_blocks
+                ),
+                "unplaced_blocks_goal_cross_entropy": _mean_or_zero(
+                    total_unplaced_blocks_cross_entropy, total_unplaced_blocks
+                ),
             }
 
         return metrics_by_policy

@@ -1,6 +1,7 @@
 from mbag.scripts.run_paper_experiment_suite import (
     LOCAL_CPU_TRAIN_UPDATES,
     ExperimentVariant,
+    _make_train_config_updates,
     build_evaluate_command,
     build_train_command,
     extract_comparable_metrics,
@@ -84,6 +85,19 @@ def test_build_train_command_includes_local_cpu_overrides(tmp_path):
     assert "simple_optimizer=True" in command
     assert "num_gpus=0" in command
     assert "num_gpus_per_worker=0" in command
+
+
+def test_make_train_config_updates_merges_json_overrides_with_local_cpu_defaults():
+    class Args:
+        local_cpu = True
+        train_config_updates_json = '{"num_training_iters":2,"num_workers":3}'
+
+    train_config_updates = _make_train_config_updates(Args())
+
+    assert train_config_updates["num_training_iters"] == 2
+    assert train_config_updates["num_workers"] == 3
+    assert train_config_updates["num_envs_per_worker"] == 1
+    assert train_config_updates["num_gpus"] == 0
 
 
 def test_build_evaluate_command_uses_comparable_eval_metrics_setup(tmp_path):

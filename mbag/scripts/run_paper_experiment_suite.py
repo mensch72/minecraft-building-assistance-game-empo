@@ -358,6 +358,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--human-run", default="BC")
     parser.add_argument("--human-policy-id", default="human")
     parser.add_argument("--human-algorithm-config-updates", default="{}")
+    parser.add_argument(
+        "--train-config-updates-json",
+        default="{}",
+        help=(
+            "JSON object of Sacred train-config overrides to apply to every "
+            "assistant training run in the suite, for example "
+            "'{\"num_training_iters\": 2}'."
+        ),
+    )
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
     parser.add_argument("--num-episodes", type=int, default=100)
@@ -393,9 +402,11 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _make_train_config_updates(args: argparse.Namespace) -> Dict[str, Any]:
+    train_config_updates: Dict[str, Any] = {}
     if args.local_cpu:
-        return dict(LOCAL_CPU_TRAIN_UPDATES)
-    return {}
+        train_config_updates.update(LOCAL_CPU_TRAIN_UPDATES)
+    train_config_updates.update(json.loads(args.train_config_updates_json))
+    return train_config_updates
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Keep the production suite easy to identify in `squeue` and accounting output.
-#SBATCH --job-name=mbag-hpc-full
+# Keep the reduced-cost full suite easy to identify in `squeue` and accounting output.
+#SBATCH --job-name=mbag-hpc-full-10pct
 # Replace this with your real Slurm account; the cluster expects explicit charging.
 #SBATCH --account=YOUR_ACCOUNT
 # Use the GPU partition because the assistant training workload is GPU-backed.
@@ -17,8 +17,8 @@
 #SBATCH --cpus-per-task=16
 # Peak memory is driven by one variant run, not by the total suite length.
 #SBATCH --mem=64G
-# Keep the time limit realistic so Slurm can backfill these jobs more aggressively.
-#SBATCH --time=12:00:00
+# Ten percent of the training iterations should comfortably fit inside the short GPU queue.
+#SBATCH --time=04:00:00
 # Nine tasks cover three variants across three seeds; cap concurrency at four GPUs total.
 #SBATCH --array=0-8%4
 # `%A` is the array master job id and `%a` the array index, which keeps logs distinct.
@@ -37,8 +37,8 @@ VARIANT_INDEX=$((SLURM_ARRAY_TASK_ID / NUM_SEEDS))
 SEED_INDEX=$((SLURM_ARRAY_TASK_ID % NUM_SEEDS))
 VARIANT="${VARIANTS[$VARIANT_INDEX]}"
 SEED="${SEEDS[$SEED_INDEX]}"
-# Default to the train.py defaults unless the caller overrides them explicitly.
-SUITE_TRAIN_UPDATES="${SUITE_TRAIN_UPDATES:-{}}"
+# train.py defaults to 500 iterations, so use 50 by default unless the caller overrides it.
+SUITE_TRAIN_UPDATES="${SUITE_TRAIN_UPDATES:-{\"num_training_iters\":50}}"
 
 # Default to the submission directory so the script works when submitted from the repo root.
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
@@ -46,8 +46,8 @@ REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 IMAGE_PATH="${IMAGE_PATH:-$REPO_DIR/mbag-hpc.sif}"
 # Use the shipped BC checkpoint unless the caller points at another human model.
 HUMAN_CHECKPOINT="${HUMAN_CHECKPOINT:-$REPO_DIR/data/logs/BC/sample_human_models/inf_blocks_True_teleportation_False/2024-04-10_18-51-43/1/checkpoint_000100}"
-# Store the split suite under one output root; each task writes one variant/seed subtree.
-OUT_ROOT="${OUT_ROOT:-$REPO_DIR/data/paper_suite_hpc_bc_split}"
+# Store the reduced suite under its own output root so it does not collide with the full run.
+OUT_ROOT="${OUT_ROOT:-$REPO_DIR/data/paper_suite_hpc_bc_split_10pct}"
 TASK_OUT_DIR="$OUT_ROOT/$VARIANT/seed_${SEED}"
 # Put large transient files on the parallel scratch filesystem recommended by the cluster docs.
 TMP_ROOT="${TMP_ROOT:-/p/tmp/$USER/mbag/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}}"
@@ -93,7 +93,7 @@ apptainer exec --nv "$IMAGE_PATH" python -c "import pkg_resources, ray, torch; p
 apptainer exec --nv "$IMAGE_PATH" python -m mbag.scripts.run_paper_experiment_suite \
   --human-checkpoint "$HUMAN_CHECKPOINT" \
   --human-run BC \
-    --out-dir "$OUT_ROOT" \
-    --variant-names "$VARIANT" \
-    --train-config-updates-json "$SUITE_TRAIN_UPDATES" \
+  --out-dir "$OUT_ROOT" \
+  --variant-names "$VARIANT" \
+  --train-config-updates-json "$SUITE_TRAIN_UPDATES" \
   --seeds "$SEED"

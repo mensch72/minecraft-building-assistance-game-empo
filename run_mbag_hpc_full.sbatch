@@ -5,8 +5,8 @@
 #SBATCH --account=YOUR_ACCOUNT
 # Use the GPU partition because the assistant training workload is GPU-backed.
 #SBATCH --partition=gpu
-# `gpushort` is easier to backfill for per-variant single-seed jobs.
-#SBATCH --qos=gpushort
+# `gpulong` is a better fit for long-running per-variant single-seed jobs.
+#SBATCH --qos=gpulong
 # Each suite element trains one assistant at a time, so request one GPU per task.
 #SBATCH --gres=gpu:1
 # Keep each array task on one node; the split across variants and seeds comes from Slurm.
@@ -17,8 +17,8 @@
 #SBATCH --cpus-per-task=16
 # Peak memory is driven by one variant run, not by the total suite length.
 #SBATCH --mem=64G
-# Keep the time limit realistic so Slurm can backfill these jobs more aggressively.
-#SBATCH --time=12:00:00
+# Restore a multi-day budget so long assistant training runs are not killed mid-suite.
+#SBATCH --time=14-00:00:00
 # Nine tasks cover three variants across three seeds; cap concurrency at four GPUs total.
 #SBATCH --array=0-8%4
 # `%A` is the array master job id and `%a` the array index, which keeps logs distinct.
@@ -37,8 +37,8 @@ VARIANT_INDEX=$((SLURM_ARRAY_TASK_ID / NUM_SEEDS))
 SEED_INDEX=$((SLURM_ARRAY_TASK_ID % NUM_SEEDS))
 VARIANT="${VARIANTS[$VARIANT_INDEX]}"
 SEED="${SEEDS[$SEED_INDEX]}"
-# Default to the train.py defaults unless the caller overrides them explicitly.
-SUITE_TRAIN_UPDATES="${SUITE_TRAIN_UPDATES:-{}}"
+# Save a checkpoint after every completed training iteration by default.
+SUITE_TRAIN_UPDATES="${SUITE_TRAIN_UPDATES:-{\"save_freq\":1}}"
 
 # Default to the submission directory so the script works when submitted from the repo root.
 REPO_DIR="${REPO_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"

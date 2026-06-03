@@ -10,3 +10,6 @@ venv.bak
 .DS_Store
 mission_records
 *.whl
+*.so
+*.egg-info/
+.venv

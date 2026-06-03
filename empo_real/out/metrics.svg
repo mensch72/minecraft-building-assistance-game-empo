@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="360" font-family="Helvetica,Arial,sans-serif">
+<text x="380.0" y="26" text-anchor="middle" font-size="17" font-weight="bold">Human power on the real MbagEnv (robot does not know the goal)</text>
+<text x="170" y="62" text-anchor="middle" font-size="14" font-weight="bold">Goals attainable (of 3)</text>
+<line x1="20" y1="280" x2="320" y2="280" stroke="#999"/>
+<rect x="50" y="280.0" width="70" height="0.0" fill="#bbbbbb"/>
+<text x="85.0" y="272.0" text-anchor="middle" font-size="13" font-weight="bold">0</text>
+<text x="85.0" y="298" text-anchor="middle" font-size="11">none</text>
+<rect x="160" y="213.33333333333334" width="70" height="66.66666666666666" fill="#d95f0e"/>
+<text x="195.0" y="205.33333333333334" text-anchor="middle" font-size="13" font-weight="bold">1</text>
+<text x="195.0" y="298" text-anchor="middle" font-size="11">goal-infer(G1)</text>
+<rect x="270" y="80.0" width="70" height="200.0" fill="#31a354"/>
+<text x="305.0" y="72.0" text-anchor="middle" font-size="13" font-weight="bold">3</text>
+<text x="305.0" y="298" text-anchor="middle" font-size="11">power</text>
+<text x="570" y="62" text-anchor="middle" font-size="14" font-weight="bold">Success over unknown goal</text>
+<line x1="420" y1="280" x2="720" y2="280" stroke="#999"/>
+<rect x="450" y="280.0" width="70" height="0.0" fill="#bbbbbb"/>
+<text x="485.0" y="272.0" text-anchor="middle" font-size="13" font-weight="bold">0%</text>
+<text x="485.0" y="298" text-anchor="middle" font-size="11">none</text>
+<rect x="560" y="213.33333333333334" width="70" height="66.66666666666666" fill="#d95f0e"/>
+<text x="595.0" y="205.33333333333334" text-anchor="middle" font-size="13" font-weight="bold">33%</text>
+<text x="595.0" y="298" text-anchor="middle" font-size="11">goal-infer(G1)</text>
+<rect x="670" y="80.0" width="70" height="200.0" fill="#31a354"/>
+<text x="705.0" y="72.0" text-anchor="middle" font-size="13" font-weight="bold">100%</text>
+<text x="705.0" y="298" text-anchor="middle" font-size="11">power</text>
+</svg>

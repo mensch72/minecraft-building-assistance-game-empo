@@ -1,0 +1,277 @@
+% Power maximization as an alternative assistant objective in MBAG.
+% Audience: the AssistanceZero authors (Laidlaw, Bronstein, Russell et al.).
+% Build:  pdflatex empo_mbag.tex && pdflatex empo_mbag.tex
+\documentclass[aspectratio=169,10pt]{beamer}
+
+% Clean theme; fall back gracefully if metropolis is missing.
+\IfFileExists{beamerthememetropolis.sty}{%
+  \usetheme{metropolis}
+  \metroset{numbering=fraction, progressbar=foot, block=fill}
+}{%
+  \usetheme{default}
+  \usecolortheme{seahorse}
+  \setbeamertemplate{navigation symbols}{}
+}
+
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+\definecolor{cPower}{HTML}{1A7A36}
+\definecolor{cGoal}{HTML}{D35400}
+\definecolor{cNone}{HTML}{888888}
+\newcommand{\Power}[1]{\textcolor{cPower}{#1}}
+\newcommand{\Goal}[1]{\textcolor{cGoal}{#1}}
+\newcommand{\None}[1]{\textcolor{cNone}{#1}}
+
+\newcommand{\Veh}{V^{e}_{h}}
+\newcommand{\figpath}{figures}
+
+\title{Power maximization as an alternative \\ assistant objective in MBAG}
+\subtitle{A controlled objective-swap inside AssistanceZero}
+\author{EMPO fork of \texttt{minecraft-building-assistance-game}}
+\date{Built on real \texttt{MbagEnv} + the trained checkpoint}
+
+\begin{document}
+
+\maketitle
+
+% ------------------------------------------------------------------ %
+\begin{frame}{Where this sits in your framework}
+  \begin{itemize}
+    \item \textbf{Assistance games}: a robot helps a human whose goal is hidden.
+      (You know this --- this is not a tutorial.)
+    \item \textbf{AssistanceZero} solves it by \Goal{goal inference}: maintain a
+      belief over goals, maximize completion of the inferred goal.
+    \item This deck: take the \Power{power-maximization} idea
+      (Heitzig \& Potham, arXiv:2508.00159) and plug it into \emph{your}
+      framework as an \textbf{alternative assistant objective} --- the robot
+      gets \emph{no extrinsic reward} and \emph{never infers} the goal.
+  \end{itemize}
+  \vfill
+  \begin{alertblock}{The claim of this talk}
+    We integrated the power objective into MBAG \emph{faithfully} --- same env,
+    same planner, same human prior --- and the behavioral contrast is sharp,
+    interesting, and (we think) worth your attention.
+  \end{alertblock}
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{Two objectives, one environment}
+  Both assistants are \textbf{model-based planners} over the known simulator
+  (the AlphaZero idea). They differ in \emph{one} line:
+  \vfill
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{\Goal{Goal-inference} (AssistanceZero)}
+        Pick a guessed goal $g^\star$; maximize the human's attainment of
+        \emph{that} goal:
+        \[ \max_{a}\; \Veh(s_a, g^\star). \]
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{\Power{Power} (Heitzig \& Potham)}
+        Maximize aggregate human power over \emph{all} possible goals,
+        goal-agnostically:
+        \[ \max_{a}\; U_r(s_a) \quad\text{(no $g^\star$).} \]
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vfill
+  \footnotesize Same \texttt{MbagEnv}, same goal-directed human prior
+  $\pi_h$, same goal set $G$. \textbf{Only the objective changes} --- so every
+  behavioral difference is attributable to the objective.
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{The power objective: \texorpdfstring{$\Veh \to X_h \to U_r$}{Veh to Xh to Ur}}
+  \begin{itemize}
+    \item \textbf{Effective goal-attainment} --- how much of goal $g$ the human
+      reaches under $\pi_h$ from the state the assistant leaves:
+      \[ \Veh(s,g)\in[0,1]. \]
+    \item \textbf{Individual power} --- a soft count of attainable goals:
+      \[ X_h \;=\; \sum_{g\in G} \Veh(s,g)^{\zeta}. \]
+    \item \textbf{Aggregate reward} --- inequality- \& risk-averse over humans
+      (single human here):
+      \[ U_r \;=\; -\Big(\textstyle\sum_h X_h^{-\xi}\Big)^{\eta}. \]
+  \end{itemize}
+  \vfill
+  \footnotesize Paper's gridworld params (Table 5): $\zeta=2,\ \xi=1,\ \eta=1.1$.
+  The robot maximizes the human's ability to reach \emph{any} goal --- it is
+  \texttt{goal\_agnostic}: it never asks ``which goal?''.
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{How it plugs into MBAG (respecting your design)}
+  \begin{itemize}
+    \item \textbf{Your environment.} The real \texttt{MbagEnv}
+      (\texttt{set\_state}, \texttt{step}, \texttt{goal\_percentage}) --- not a toy.
+    \item \textbf{$\pi_h$ = your human model.} A goal-directed builder fills the
+      $\pi_h$ slot; we verified your \emph{trained} \texttt{human} and
+      \texttt{assistant} policies load from\\
+      \texttt{data/assistancezero\_assistant/checkpoint\_002000}
+      (\texttt{load\_checkpoint.py}) --- same slot, learned, at scale.
+    \item \textbf{Your planner.} AlphaZero-style model-based planning: score
+      candidate help by \emph{rolling $\pi_h$ forward} in the real env.
+    \item \textbf{The fork's substrate.} A \texttt{goal\_agnostic} flag
+      (zeroes/freezes the goal head) enforces the no-inference premise;
+      \textbf{bedrock} (breakable only by the robot) and \textbf{clutter} are the
+      affordances that reveal the difference.
+  \end{itemize}
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{Experimental design}
+  \begin{itemize}
+    \item A \textbf{controlled objective-swap}: three arms ---
+      \None{no assistant}, \Goal{goal-inference}, \Power{power} --- on the
+      \emph{same} state, goal set, and human.
+    \item \textbf{No training.} Each assistant is a planner: it enumerates a small
+      set of candidate ``help'' plans, applies each to the world, and scores it by
+      its objective via real $\pi_h$ rollouts.
+    \item Two vignettes, each engineered so the objectives \emph{must} diverge:
+      \begin{itemize}
+        \item[V1] \textbf{open the options} --- bedrock obstacles only the robot
+          can clear.
+        \item[V2] \textbf{don't foreclose} --- committing to a guess can foreclose
+          the other goals.
+      \end{itemize}
+  \end{itemize}
+  \vfill
+  \footnotesize Code: \texttt{empo\_real/vignettes.py}. The numbers and figures on
+  the next slides are produced by running it directly.
+\end{frame}
+
+% ------------------------------------------------------------------ %
+% V1
+\begin{frame}{V1 --- ``open the options'' (bedrock asymmetry)}
+  \footnotesize Every goal = one stone block, blocked by bedrock only the robot
+  can clear. True goal = \textbf{G2} (hidden).
+  \begin{center}
+    \begin{tabular}{cccc}
+      \includegraphics[height=1.35cm]{\figpath/v1_goal0.png} &
+      \includegraphics[height=1.35cm]{\figpath/v1_goal1.png} &
+      \includegraphics[height=1.35cm]{\figpath/v1_goal2.png} & \\
+      G0 & G1 (guess) & \textbf{G2 (true)} &
+    \end{tabular}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \centering\scriptsize
+      \begin{tabular}{cc}
+        \Goal{goal-inference}: clears only its guess & \Power{power}: clears all \\
+        \includegraphics[height=1.5cm]{\figpath/v1_goalinf_human.png} &
+        \includegraphics[height=1.5cm]{\figpath/v1_power_human.png} \\
+        $X_h=1$,\ \Goal{human \textbf{fails} true goal} ($\Veh\!=\!0$) &
+        $X_h=3$,\ \Power{human \textbf{succeeds}} ($\Veh\!=\!1$)
+      \end{tabular}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \footnotesize
+      \textbf{Takeaway.} The goal-inference robot serves its \emph{guess} and
+      leaves the true goal walled off. The power robot opens \emph{every} option
+      --- so whatever the human wants, it is reachable.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------ %
+% V2
+\begin{frame}{V2 --- ``don't foreclose'' (disempowerment when wrong)}
+  \footnotesize Goals A and B share a foundation. The robot can build the
+  foundation (helps both) or commit toward A. True goal = \textbf{G1 = B} (hidden).
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \centering\scriptsize
+      \begin{tabular}{ccc}
+        \None{no assistant} & \Goal{goal-inference} & \Power{power} \\
+        \includegraphics[height=1.7cm]{\figpath/v2_none_human.png} &
+        \includegraphics[height=1.7cm]{\figpath/v2_goalinf_human.png} &
+        \includegraphics[height=1.7cm]{\figpath/v2_power_human.png} \\
+        $X_h=1.25$ & commits to A & builds foundation \\
+        \None{ok ($\Veh\!=\!1$)} &
+        \Goal{only 43\% ($\Veh\!=\!0.43$)} &
+        \Power{succeeds ($\Veh\!=\!1$)}
+      \end{tabular}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \footnotesize
+      \alert{The sharp one.} Guessing wrong, the goal-inference robot pours effort
+      into A; the human must \emph{undo} it and runs out of time ---
+      \textbf{worse than no help at all} ($1.18 < 1.25$). This is exactly the
+      \emph{disempowerment-when-wrong} the power objective avoids by keeping
+      options open.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{Results summary}
+  \centering
+  \begin{tabular}{llccc}
+    \toprule
+    Vignette & Arm & plan & $X_h$ & true-goal $\Veh$ \\
+    \midrule
+    \multirow{3}{*}{V1 open the options}
+      & \None{no assistant}   & noop          & $0.00$ & \None{$0.00$ fails} \\
+      & \Goal{goal-inference} & clear G1      & $1.00$ & \Goal{$0.00$ fails} \\
+      & \Power{power}         & clear all     & $\mathbf{3.00}$ & \Power{$\mathbf{1.00}$ succeeds} \\
+    \midrule
+    \multirow{3}{*}{V2 don't foreclose}
+      & \None{no assistant}   & noop              & $1.25$ & \None{$1.00$ ok} \\
+      & \Goal{goal-inference} & build toward A    & $1.18$ & \Goal{$0.43$ fails} \\
+      & \Power{power}         & build foundation  & $\mathbf{1.36}$ & \Power{$\mathbf{1.00}$ succeeds} \\
+    \bottomrule
+  \end{tabular}
+  \vfill
+  \footnotesize $\zeta=2,\ \xi=1,\ \eta=1.1$. Figures and numbers regenerated by
+  \texttt{empo\_real/vignettes.py} (and \texttt{presentation/make\_figures.py}).
+  In V2 the goal-inference arm leaves the human \emph{below} the no-help baseline.
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{Why it matters}
+  \begin{itemize}
+    \item \textbf{Empowerment instead of inference.} The robot need not be
+      \emph{right} about the goal --- it keeps the human able to reach any of them.
+    \item \textbf{Robust to wrong beliefs.} Goal inference fails gracelessly when
+      the belief is wrong (V2): effort spent on the wrong goal actively
+      \emph{disempowers}. Power degrades gracefully.
+    \item \textbf{Avoid irreversible disempowerment.} The power objective is
+      explicitly inequality- and risk-averse ($U_r$) --- it resists foreclosing
+      options, which is the corrigibility / safety motivation of the paper.
+    \item \textbf{Complementary to AssistanceZero}, not a replacement: same env,
+      same human, swappable objective --- an interesting alternative for your
+      framework to study.
+  \end{itemize}
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}{Honest scope \& next steps}
+  \begin{block}{What this is}
+    A faithful \emph{planning-based} integration of the power objective into MBAG;
+    a controlled objective comparison with your real components. No training.
+  \end{block}
+  \begin{block}{What this is \emph{not} (yet)}
+    A trained head-to-head at full $11\times10\times10$ scale. That is the
+    labelled next phase (EMPO\_PLAN Phase 2--3):
+    \begin{itemize}\footnotesize
+      \item \textbf{Phase 2:} amortize the planner's $\Veh$ into a learned network.
+      \item \textbf{Phase 3:} train the power-maximizing assistant via your
+        AlphaZero loop; head-to-head vs.\ the trained AssistanceZero assistant.
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+% ------------------------------------------------------------------ %
+\begin{frame}[standout]{Conclusion}
+  The power objective slots cleanly into AssistanceZero --- same env, same human,
+  same planner.\\[1ex]
+  When the robot's belief is wrong, \Goal{goal inference} can disempower; \Power{power}
+  keeps the human's options open.\\[1ex]
+  \footnotesize An interesting alternative assistant objective for your framework.
+\end{frame}
+
+\end{document}
